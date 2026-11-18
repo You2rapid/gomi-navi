@@ -165,9 +165,9 @@ a{color:var(--accent)}
 .day-card .when b{font-size:20px}
 .day-card .when span{color:var(--muted);font-size:14px}
 .day-card .when em{margin-left:auto;font-style:normal;font-size:12px;color:var(--muted)}
-.day-card .when em.late{color:#d32f2f;font-weight:800;font-size:13px}
-:root[data-theme="dark"] .day-card .when em.late{color:#ff6b63}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .day-card .when em.late{color:#ff6b63}}
+.day-card .when em .late{color:#d32f2f;font-weight:800;font-size:13px}
+:root[data-theme="dark"] .day-card .when em .late{color:#ff6b63}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .day-card .when em .late{color:#ff6b63}}
 .day-card .big{display:flex;flex-direction:column;gap:6px}
 .day-card .big .tag{justify-content:flex-start;font-size:19px;padding:9px 12px;border-radius:10px;gap:8px}
 .day-card .big .tag small{font-size:12px;font-weight:700;opacity:.85;margin-left:auto}
@@ -224,6 +224,31 @@ a{color:var(--accent)}
 .picker .alt summary{cursor:pointer;color:var(--accent);font-weight:700}
 .sched-grid{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
 .sched-grid button{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 12px;cursor:pointer;font-weight:700}
+
+/* 地区の切り替え・管理 */
+.area-switch{margin:-4px 0 12px;overflow-x:auto}
+.area-switch button{flex:1 0 auto;line-height:1.3;padding:6px 10px;white-space:nowrap}
+.area-switch button small{display:block;font-size:11px;font-weight:normal}
+.area-list.mine{max-height:none}
+.area-list.mine li{display:flex;align-items:stretch}
+.area-list.mine li > button:first-child{flex:1;min-width:0}
+.area-list .cur{width:1.2em;flex:none;color:var(--accent);font-weight:800}
+.area-list .del{flex:none;width:48px;justify-content:center;color:var(--muted);border-left:1px solid var(--line) !important}
+
+/* お知らせ（年末年始・祝日） */
+.notice{display:flex;gap:10px;background:color-mix(in srgb,#e53935 9%,var(--surface));border:1.5px solid color-mix(in srgb,#e53935 45%,transparent);border-radius:14px;padding:10px 14px;margin:0 0 12px}
+.notice .ic{flex:none;width:22px;height:22px;border-radius:50%;background:#e53935;color:#fff;font-weight:900;display:grid;place-items:center;font-size:14px;margin-top:2px}
+.notice .ttl{display:block;font-size:13px;color:var(--muted);margin-bottom:2px}
+.notice p{margin:2px 0;font-size:14.5px}
+
+/* 品目検索の「次に出せる日」 */
+.bcol{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.nx{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.next-box{margin:10px 18px 0;border-radius:14px;padding:10px 14px;background:var(--surface-2)}
+.next-box .lbl{font-size:12px;color:var(--muted)}
+.next-box .dt{font-size:21px;font-weight:800}
+.next-box .dt .in{font-size:14px;color:var(--accent);margin-left:10px}
+.next-box .more{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:4px 0 0;font-size:14px}
 
 footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
 .theme-btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;width:34px;height:34px;cursor:pointer;margin-left:auto;flex:none}
@@ -414,7 +439,16 @@ function itemRow(it, qn){
   const flags = (it.new ? `<span class="flag new">新規掲載</span>` : "") + (it.chg ? `<span class="flag chg">区分変更</span>` : "");
   return `<li><button class="item" data-id="${it.id}">
     <span class="txt"><span class="nm">${highlight(it, qn)}${flags}</span>${it.d ? `<span class="nt" style="display:block">${esc(it.d)}</span>` : ""}</span>
-    ${badge(it.c)}</button></li>`;
+    <span class="bcol">${badge(it.c)}${nextLabel(it.c)}</span></button></li>`;
+}
+// 品目一覧の「次 11/25（水）」表示（同じ区分は1回だけ計算）
+let nextMemo = {};
+function nextLabel(c){
+  if (!(c in nextMemo)){
+    const d = typeof nextFor === "function" ? nextFor(c) : null;
+    nextMemo[c] = d ? `<span class="nx">次 ${md(d)}</span>` : "";
+  }
+  return nextMemo[c];
 }
 
 /* ===== 検索 ===== */
@@ -439,6 +473,7 @@ function search(){
 }
 
 function render(){
+  nextMemo = {};
   const {qn, list} = search();
   const res = $("#results"), st = $("#status"), kb = $("#kanaBar");
   $("#clear").classList.toggle("show", !!state.q);
@@ -546,6 +581,7 @@ function openItem(id){
       <div class="cat">${esc(c.name)}</div>
       ${c.bag ? `<div class="bag">出し方：${esc(c.bag)}</div>` : ""}
     </div>
+    ${nextBox(it.c)}
     ${it.d ? `<div class="sec"><h3>この品目の注意</h3><div class="note-box">${esc(it.d)}</div></div>` : ""}
     ${c.how.length ? `<div class="sec"><h3>${esc(c.name.replace(/（.*?）/,""))}の出し方</h3>${list(c.how)}</div>` : ""}
     ${c.tip ? `<div class="sec"><p class="small">${esc(c.tip)}</p></div>` : ""}
@@ -553,6 +589,17 @@ function openItem(id){
   $("#scrim").classList.add("open"); sh.classList.add("open");
   sh.scrollTop = 0;
   sh.querySelector(".x").focus({preventScroll:true});
+}
+// 詳細シートの「次に出せる日」
+function nextBox(c){
+  if (!CAL || !(c in SHORT)) return "";
+  if (!calState.area) return `<div class="next-box"><span class="small">「収集日」タブで地区をえらぶと、この品目を次に出せる日が表示されます。</span> <button class="more" data-gocal>地区をえらぶ →</button></div>`;
+  const d = nextFor(c);
+  return `<div class="next-box">
+    <div class="lbl">次に出せる日（${esc(calState.area.n)}）</div>
+    ${d ? `<div class="dt">${md(d)}<span class="in">${untilText(d)}</span></div><div class="small">${esc(sched().rules[c] || "")}・朝8時まで</div>`
+        : `<div class="small">今年度のカレンダーにはもう収集日がありません。</div>`}
+    <button class="more" data-gocal>カレンダーで見る →</button></div>`;
 }
 function closeSheet(){ $("#scrim").classList.remove("open"); $("#sheet").classList.remove("open"); }
 
@@ -623,7 +670,10 @@ const BAG = {"可燃":"緑の袋","容プラ":"黄の袋","他プラ":"黄の袋
 const WDJ = "日月火水木金土";
 // 令和8年度の祝日・休日（カレンダーの日付を赤くする用）
 const HOLIDAYS = new Set(["2026-04-29","2026-05-03","2026-05-04","2026-05-05","2026-05-06","2026-07-20","2026-08-11","2026-09-21","2026-09-22","2026-09-23","2026-10-12","2026-11-03","2026-11-23","2027-01-01","2027-01-11","2027-02-11","2027-02-23","2027-03-21","2027-03-22"]);
-const AREA_KEY = "gomi2-area";
+// 年末年始（祝日ではないが収集が休みになる日）
+const YEAR_END = new Set(["2026-12-29","2026-12-30","2026-12-31","2027-01-01","2027-01-02","2027-01-03"]);
+const AREAS_KEY = "gomi2-areas", CUR_KEY = "gomi2-cur", OLD_AREA_KEY = "gomi2-area";
+const MAX_AREAS = 6;
 
 const pad = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -634,11 +684,74 @@ function now(){
   const m = location.search.match(/date=(\d{4})-(\d{2})-(\d{2})/);
   return m ? new Date(+m[1], +m[2]-1, +m[3], 7, 0) : new Date();
 }
-const calState = {area:null, month:null, picking:false, region:"徳山", q:""};
-try { calState.area = JSON.parse(localStorage.getItem(AREA_KEY) || "null"); } catch(e){}
-if (calState.area && !(CAL && CAL.schedules[calState.area.s])) calState.area = null;
+// 登録した地区（複数）と、いま表示している地区
+const calState = {areas:[], cur:0, area:null, month:null, picking:false, region:"徳山", q:""};
+try {
+  let list = JSON.parse(localStorage.getItem(AREAS_KEY) || "null");
+  if (!list){ const old = JSON.parse(localStorage.getItem(OLD_AREA_KEY) || "null"); list = old ? [old] : []; }
+  calState.areas = list.filter(a => a && CAL && CAL.schedules[a.s]);
+  calState.cur = Math.min(+localStorage.getItem(CUR_KEY) || 0, Math.max(calState.areas.length - 1, 0));
+} catch(e){}
+calState.area = calState.areas[calState.cur] || null;
+function saveAreas(){
+  calState.area = calState.areas[calState.cur] || null;
+  try { localStorage.setItem(AREAS_KEY, JSON.stringify(calState.areas)); localStorage.setItem(CUR_KEY, String(calState.cur)); } catch(e){}
+}
 
 const sched = () => CAL.schedules[calState.area.s];
+const today0 = () => { const t = now(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
+// 次に出せる日（朝8時を過ぎたら、きょうは数えない）
+function nextFor(c){
+  if (!CAL || !calState.area || !sched().rules[c]) return null;
+  const t = now();
+  let d = t.getHours() >= 8 ? addDays(today0(), 1) : today0();
+  for (let i = 0; i < 120 && inRange(d); i++, d = addDays(d, 1))
+    if ((sched().days[ymd(d)] || []).includes(c)) return d;
+  return null;
+}
+function untilText(d){
+  const diff = Math.round((d - today0()) / 864e5);
+  return diff === 0 ? "きょう" : diff === 1 ? "あした" : `あと${diff}日`;
+}
+// 祝日・年末年始で、いつもなら収集がある曜日なのに休みになる日／振替日（これから2週間）
+const usualWd = {};
+function usuallyCollected(d){
+  const s = calState.area.s;
+  if (!usualWd[s]){
+    const cnt = Array(7).fill(0), tot = Array(7).fill(0);
+    for (let x = new Date(CAL.year, 3, 1); inRange(x); x = addDays(x, 1)){
+      tot[x.getDay()]++;
+      if ((sched().days[ymd(x)] || []).length) cnt[x.getDay()]++;
+    }
+    usualWd[s] = cnt.map((n, i) => n / tot[i]);
+  }
+  return usualWd[s][d.getDay()] >= 0.6;
+}
+function notices(){
+  const off = [], moved = [];
+  for (let i = 0; i < 14; i++){
+    const d = addDays(today0(), i), k = ymd(d);
+    if (!inRange(d)) break;
+    if (!catsOn(d).length && (HOLIDAYS.has(k) || YEAR_END.has(k)) && usuallyCollected(d)) off.push(d);
+    if (movedOn(d).length) moved.push(d);
+  }
+  const out = [];
+  // 続いている休みはまとめる（土日をはさむ場合もまとめる）
+  let run = [];
+  const flush = () => { if (run.length) out.push(`<b>${run.length > 1 ? `${md(run[0])}〜${md(run[run.length-1])}` : md(run[0])}</b> は収集がありません`); run = []; };
+  off.forEach(d => {
+    const prev = run[run.length - 1];
+    if (prev){
+      let ok = true;
+      for (let x = addDays(prev, 1); x < d; x = addDays(x, 1)) if (catsOn(x).length || (x.getDay() !== 0 && x.getDay() !== 6)) ok = false;
+      if (!ok) flush();
+    }
+    run.push(d);
+  });
+  flush();
+  moved.forEach(d => out.push(`<b>${md(d)}</b> は ${movedOn(d).map(c => esc(LONG[c])).join("・")} の振替日です`));
+  return out;
+}
 const catsOn = d => (sched().days[ymd(d)] || []).slice().sort((a,b) => CAL_ORDER.indexOf(a) - CAL_ORDER.indexOf(b));
 const movedOn = d => sched().moved[ymd(d)] || [];
 const inRange = d => { const k = ymd(d); return k >= `${CAL.year}-04-01` && k <= `${CAL.year+1}-03-31`; };
@@ -656,7 +769,13 @@ function renderCal(){
   let html = `<div class="area-bar">
       <svg class="pin" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
       <div class="nm">${esc(a.n)}<small>${esc(a.r ? a.r + "地域・" : "")}${esc(schedLabel(a.s))}</small></div>
-      <button class="btn-sub" data-pick>地区を変える</button></div>`;
+      <button class="btn-sub" data-pick>地区の追加・変更</button></div>`;
+  if (calState.areas.length > 1){
+    html += `<div class="seg area-switch" role="group" aria-label="表示する地区">${calState.areas.map((x, i) =>
+      `<button data-switch="${i}" aria-pressed="${i === calState.cur}">${esc(x.n.replace(/（.*?）/g, ""))}<small>${esc(schedLabel(x.s))}</small></button>`).join("")}</div>`;
+  }
+  const ns = inRange(today) ? notices() : [];
+  if (ns.length) html += `<div class="notice" role="note"><span class="ic" aria-hidden="true">!</span><div><b class="ttl">お知らせ（これから2週間）</b>${ns.map(n => `<p>${n}</p>`).join("")}</div></div>`;
 
   // 今日・明日
   if (inRange(today) || inRange(addDays(today, 1))){
@@ -665,29 +784,21 @@ function renderCal(){
       const d = addDays(today, i);
       const cats = inRange(d) ? catsOn(d) : [];
       const mv = inRange(d) ? movedOn(d) : [];
-      const em = i === 0 && cats.length ? (late ? "受付は終了（朝8時まで）" : "朝8時までに出す") : (i === 1 && cats.length ? "あすの朝8時まで" : "");
+      const em = i === 0 && cats.length ? (late ? `<b class="late">受付は終了</b>（朝8時まで）` : "朝8時までに出す") : (i === 1 && cats.length ? "あすの朝8時まで" : "");
       return `<button class="day-card${i === 0 ? " today" : ""}" data-day="${ymd(d)}">
-        <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em${i === 0 && late ? ` class="late"` : ""}>${em}</em>` : ""}</div>
+        <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em>${em}</em>` : ""}</div>
         ${cats.length ? `<div class="big">${cats.map(c => `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}">${esc(LONG[c])}${mv.includes(c) ? `<span class="moved">振替</span>` : ""}<small>${esc(BAG[c])}</small></span>`).join("")}</div>`
           : `<div class="none">収集はありません</div>`}
       </button>`;
     }).join("") + `</div>`;
   }
 
-  // 次の収集日
-  const start = t.getHours() >= 8 ? addDays(today, 1) : today;
-  const nexts = CAL_ORDER.filter(c => sched().rules[c]).map(c => {
-    for (let i = 0; i < 70; i++){
-      const d = addDays(start, i);
-      if (!inRange(d)) break;
-      if ((sched().days[ymd(d)] || []).includes(c)) return [c, d];
-    }
-    return [c, null];
-  }).sort((a, b) => (a[1] || Infinity) - (b[1] || Infinity));  // 近い順
+  // 次の収集日（近い順）
+  const nexts = CAL_ORDER.filter(c => sched().rules[c]).map(c => [c, nextFor(c)])
+    .sort((a, b) => (a[1] || Infinity) - (b[1] || Infinity));
   html += `<div class="card"><h2>つぎの収集日</h2><ul class="next-list">` + nexts.map(([c, d]) => {
-    const diff = d ? Math.round((d - today) / 864e5) : null;
-    const when = diff === null ? "" : diff === 0 ? "きょう" : diff === 1 ? "あした" : `あと${diff}日`;
-    return `<li>${tag(c)}<span class="dt">${d ? md(d) : "―"}<span class="rule">${esc(sched().rules[c])}</span></span><span class="in${diff !== null && diff <= 1 ? " soon" : ""}">${when}</span></li>`;
+    const when = d ? untilText(d) : "";
+    return `<li>${tag(c)}<span class="dt">${d ? md(d) : "―"}<span class="rule">${esc(sched().rules[c])}</span></span><span class="in${when === "きょう" || when === "あした" ? " soon" : ""}">${when}</span></li>`;
   }).join("") + `</ul></div>`;
 
   // 月カレンダー
@@ -717,8 +828,13 @@ function renderCal(){
 function renderPicker(){
   const v = $("#view-cal");
   const regions = ["徳山","新南陽","熊毛","鹿野"];
+  const has = calState.areas.length > 0;
   v.innerHTML = `<div class="picker">
-    <h2>お住まいの地区をえらんでください</h2>
+    ${has ? `<h2>登録している地区</h2>
+    <p>タップすると表示を切り替えます。自宅と実家など、${MAX_AREAS}か所まで登録できます。</p>
+    <ul class="area-list mine">${calState.areas.map((a, i) => `<li><button data-switch="${i}">${i === calState.cur ? `<span class="cur" aria-label="表示中">✓</span>` : `<span class="cur"></span>`}${esc(a.n)}<span class="s">${esc(schedLabel(a.s))}</span></button><button class="del" data-remove="${i}" aria-label="${esc(a.n)}を削除">✕</button></li>`).join("")}</ul>
+    <p style="margin-top:12px"><button class="btn-sub" data-pick-cancel>もどる</button></p>
+    <h2 style="margin-top:22px">地区を追加する</h2>` : `<h2>お住まいの地区をえらんでください</h2>`}
     <p>町名（行政区）によって、ごみの収集日程がちがいます。えらんだ地区はこのスマホに記憶されます。</p>
     <div class="seg">${regions.map(r => `<button data-region="${r}" aria-pressed="${calState.region === r}">${r}</button>`).join("")}</div>
     <input id="areaQ" type="search" placeholder="町名で絞り込む（例：岐山通、くしはま）" value="${esc(calState.q)}" autocomplete="off">
@@ -726,7 +842,6 @@ function renderPicker(){
     <details class="alt"><summary>日程（A〜H など）が分かっている場合</summary>
       <div class="sched-grid">${Object.keys(CAL.schedules).map(s => `<button data-sched="${esc(s)}">${esc(schedLabel(s))}</button>`).join("")}</div>
     </details>
-    ${calState.area ? `<p style="margin-top:14px"><button class="btn-sub" data-pick-cancel>やめる（${esc(calState.area.n)}のまま）</button></p>` : ""}
   </div>`;
   renderAreaList();
   $("#areaQ").addEventListener("input", e => { calState.q = e.target.value; renderAreaList(); });
@@ -739,11 +854,27 @@ function renderAreaList(){
     : `<li style="padding:14px;color:var(--muted)">見つかりませんでした。漢字で入力するか、上の地域から探してください。</li>`;
 }
 
+// 地区をえらんだとき：登録済みならそこへ切り替え、なければ追加して表示
 function setArea(a){
-  calState.area = {r:a.r || "", n:a.n, s:a.s};
+  const item = {r:a.r || "", n:a.n, s:a.s};
+  let i = calState.areas.findIndex(x => x.n === item.n && x.s === item.s);
+  if (i < 0){
+    if (calState.areas.length >= MAX_AREAS){ alert(`登録できるのは${MAX_AREAS}か所までです。使わない地区を ✕ で削除してください。`); return; }
+    calState.areas.push(item); i = calState.areas.length - 1;
+  }
+  switchArea(i);
+}
+function switchArea(i){
+  calState.cur = i; saveAreas();
   calState.picking = false; calState.q = "";
-  try { localStorage.setItem(AREA_KEY, JSON.stringify(calState.area)); } catch(e){}
-  renderCal(); window.scrollTo({top:0});
+  renderCal(); render(); window.scrollTo({top:0});
+}
+function removeArea(i){
+  const a = calState.areas[i];
+  if (!confirm(`「${a.n}」を登録から外しますか？`)) return;
+  calState.areas.splice(i, 1);
+  if (calState.cur >= i && calState.cur > 0) calState.cur--;
+  saveAreas(); render(); renderCal();
 }
 
 function openDay(k){
@@ -775,7 +906,11 @@ $("#view-cal").addEventListener("click", e => {
     renderCal(); return;
   }
   if (e.target.closest("[data-pick]")){ calState.picking = true; calState.region = (calState.area && calState.area.r) || "徳山"; renderCal(); window.scrollTo({top:0}); return; }
-  if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; renderCal(); return; }
+  if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; renderCal(); window.scrollTo({top:0}); return; }
+  const sw = e.target.closest("[data-switch]");
+  if (sw){ switchArea(+sw.dataset.switch); return; }
+  const rm = e.target.closest("[data-remove]");
+  if (rm){ removeArea(+rm.dataset.remove); return; }
   const r = e.target.closest("[data-region]");
   if (r){ calState.region = r.dataset.region; calState.q = ""; renderPicker(); return; }
   const ar = e.target.closest("[data-area]");
@@ -814,6 +949,7 @@ document.addEventListener("click", e => {
   if (g){ closeSheet(); setTab("guide"); const el = document.getElementById("cat-" + g.dataset.guide); if (el) window.scrollTo({top: el.offsetTop - $("#hdr").offsetHeight - 8}); return; }
   const f = e.target.closest("[data-filter]");
   if (f){ closeSheet(); state.cat = f.dataset.filter; state.q = ""; $("#q").value = ""; renderChips(); setTab("search"); render(); return; }
+  if (e.target.closest("[data-gocal]")){ closeSheet(); setTab("cal"); return; }
   if (e.target.closest("[data-allcats]")){ state.cat = null; renderChips(); render(); return; }
   const j = e.target.closest("[data-jump]");
   if (j){ const el = document.getElementById("g-" + j.dataset.jump); if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - $("#hdr").offsetHeight - 4, behavior:"smooth"}); }
