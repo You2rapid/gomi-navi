@@ -1,0 +1,8 @@
+# 元の冊子PDF（市の資料・22MB）は公開しない
+*.pdf
+# 抽出時の作業ファイル
+items.json
+warn.txt
+__pycache__/
+# ローカル設定
+.claude/
