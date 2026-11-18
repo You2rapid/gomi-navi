@@ -165,6 +165,9 @@ a{color:var(--accent)}
 .day-card .when b{font-size:20px}
 .day-card .when span{color:var(--muted);font-size:14px}
 .day-card .when em{margin-left:auto;font-style:normal;font-size:12px;color:var(--muted)}
+.day-card .when em.late{color:#d32f2f;font-weight:800;font-size:13px}
+:root[data-theme="dark"] .day-card .when em.late{color:#ff6b63}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .day-card .when em.late{color:#ff6b63}}
 .day-card .big{display:flex;flex-direction:column;gap:6px}
 .day-card .big .tag{justify-content:flex-start;font-size:19px;padding:9px 12px;border-radius:10px;gap:8px}
 .day-card .big .tag small{font-size:12px;font-weight:700;opacity:.85;margin-left:auto}
@@ -664,7 +667,7 @@ function renderCal(){
       const mv = inRange(d) ? movedOn(d) : [];
       const em = i === 0 && cats.length ? (late ? "受付は終了（朝8時まで）" : "朝8時までに出す") : (i === 1 && cats.length ? "あすの朝8時まで" : "");
       return `<button class="day-card${i === 0 ? " today" : ""}" data-day="${ymd(d)}">
-        <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em>${em}</em>` : ""}</div>
+        <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em${i === 0 && late ? ` class="late"` : ""}>${em}</em>` : ""}</div>
         ${cats.length ? `<div class="big">${cats.map(c => `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}">${esc(LONG[c])}${mv.includes(c) ? `<span class="moved">振替</span>` : ""}<small>${esc(BAG[c])}</small></span>`).join("")}</div>`
           : `<div class="none">収集はありません</div>`}
       </button>`;
