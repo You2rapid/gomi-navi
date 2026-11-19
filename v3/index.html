@@ -165,10 +165,10 @@ a{color:var(--accent)}
 .btn-sub:hover{border-color:var(--accent)}
 
 .day-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
-@media (max-width:520px){.day-cards{grid-template-columns:1fr}}
+@media (max-width:680px){.day-cards{grid-template-columns:1fr}}
 .day-card{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:12px 14px 14px;border:2px solid transparent;cursor:pointer;text-align:left;width:100%;display:flex;flex-direction:column;justify-content:flex-start}
 .day-card.today{border-color:var(--accent)}
-.day-card .when{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}
+.day-card .when{display:flex;align-items:baseline;gap:6px;margin:0 0 8px}
 .day-card .when b{font-size:20px}
 .day-card .when span{color:var(--muted);font-size:14px}
 .day-card .when em{margin-left:auto;font-style:normal;font-size:12px;color:var(--muted)}
@@ -184,8 +184,6 @@ a{color:var(--accent)}
    入りきらないときは「◯時まで」を次の行（右寄せ）に送る（下松市は文字が長いため） */
 .day-card .when{flex-wrap:wrap;row-gap:2px}
 .day-card .when b,.day-card .when span,.day-card .when em{white-space:nowrap}
-/* 2列のときは、日付と「◯時まで」をいつも2行に分けて、きょう・あしたの高さをそろえる */
-@media (min-width:521px){ .day-card .when em{flex-basis:100%;margin-left:0} }
 /* ごみの名前と袋の色が1行に入らないときは、袋の色を次の行（右寄せ）へ */
 .day-card .big .tag{flex-wrap:wrap;row-gap:2px}
 .day-card .big .tag .tn{white-space:nowrap}
@@ -1040,7 +1038,8 @@ function useCity(id){
 }
 // 表示中の地区の市に合わせる（地区がなければ、えらんでいる市）
 function syncCity(){ useCity(calState.area ? calState.area.c : calState.city); }
-const cutText = () => `朝${CITY.cut[0]}時${CITY.cut[1] ? CITY.cut[1] + "分" : ""}`;
+// 出す時刻（30分は「半」と短く書く。例：朝8時半）
+const cutText = () => `朝${CITY.cut[0]}時${CITY.cut[1] === 30 ? "半" : CITY.cut[1] ? CITY.cut[1] + "分" : ""}`;
 const isLate = t => t.getHours() * 60 + t.getMinutes() >= CITY.cut[0] * 60 + CITY.cut[1];
 // 地区の説明（例：周南市徳山地域・A日程／下松市）
 const areaSub = a => { const cy = CITIES[a.c], sl = cy.schedLabel(a.s); return cy.name + (a.r ? cy.regionName(a.r) : "") + (sl !== a.n ? "・" + sl : ""); };
@@ -1166,7 +1165,7 @@ function renderCal(){
       const d = addDays(today, i);
       const cats = inRange(d) ? catsOn(d) : [];
       const mv = inRange(d) ? movedOn(d) : [];
-      const em = i === 0 && cats.length ? (late ? `<b class="late">受付は終了</b>（${cut}まで）` : `${cut}までに出す`) : (i === 1 && cats.length ? `あすの${cut}まで` : "");
+      const em = i === 0 && cats.length ? (late ? `<b class="late">受付は終了</b>` : `${cut}までに出す`) : (i === 1 && cats.length ? `あすの${cut}まで` : "");
       return `<button class="day-card${i === 0 ? " today" : ""}" data-day="${ymd(d)}">
         <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em>${em}</em>` : ""}</div>
         ${cats.length ? `<div class="big">${cats.map(c => `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}"><span class="tn">${esc(LONG[c])}</span>${mv.includes(c) ? `<span class="moved">振替</span>` : ""}<small>${esc(BAG[c])}</small></span>`).join("")}</div>`
