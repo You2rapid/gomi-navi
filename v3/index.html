@@ -106,7 +106,8 @@ ul.items li + li{border-top:1px solid var(--line)}
 .item:hover{background:var(--surface-2)}
 .item .txt{flex:1;min-width:0}
 .item .nm{font-weight:600;line-height:1.45}
-.item .nt{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 説明書きは途中で切らずに、折り返して全部表示する */
+.item .nt{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:2px;overflow-wrap:anywhere}
 .item mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
 .flag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:2px;border:1px solid currentColor}
 .flag.new{color:var(--c-shokon)} .flag.chg{color:var(--c-funen)}
