@@ -284,6 +284,16 @@ footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
 .area-list .nm2{flex:1;min-width:0}
 .area-list .desc{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
 .city-badge{display:inline-block;font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 5px;margin-right:6px;vertical-align:1px}
+/* ===== 今いる場所から探す ===== */
+.geo-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 14px;font-size:15px;margin:2px 0 4px;color:var(--accent);border-color:var(--accent)}
+.geo-note{font-size:12px!important;margin:0 0 10px!important}
+.geo-wait{display:flex;align-items:center;gap:10px}
+.geo-res{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;margin:6px 0 16px}
+.geo-res.note-box{box-shadow:none}
+.geo-res p{color:var(--text)!important;margin:0 0 8px!important}
+.geo-res .geo-hd{font-size:15px}
+.geo-res .area-list{box-shadow:none;border:1px solid var(--line);margin:0 0 8px;max-height:none}
+.geo-mark{color:var(--accent)!important;border-color:var(--accent)!important}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -334,7 +344,8 @@ footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
   </main>
   <footer>
     <div id="cityFoot"></div>
-    カメラでの判定は Google の MobileNet と TensorFlow.js（Apache License 2.0）をスマホの中で動かしています。写真は外に送りません。
+    カメラでの判定は Google の MobileNet と TensorFlow.js（Apache License 2.0）をスマホの中で動かしています。写真は外に送りません。<br>
+    「今いる場所から探す」は、政府統計の総合窓口（e-Stat）の国勢調査（令和2年）町丁・字等別境界データを加工して使っています。位置情報は外に送りません。
   </footer>
 </div>
 
@@ -1198,6 +1209,9 @@ function renderPicker(){
     <p style="margin-top:12px"><button class="btn-sub" data-pick-cancel>もどる</button></p>
     <h2 style="margin-top:22px">地区を追加する</h2>` : `<h2>お住まいの地区をえらんでください</h2>`}
     <p>市や町名によって、ごみの収集日がちがいます。えらんだ地区はこのスマホに記憶されます。</p>
+    <button class="btn-sub geo-btn" data-geo>📍 今いる場所から探す</button>
+    <p class="small geo-note">位置情報はこのスマホの中だけで使い、外には送りません。</p>
+    <div id="geoBox">${geoBoxHtml()}</div>
     <span class="step">市</span>
     <div class="seg">${Object.entries(CITIES).map(([id, c]) => `<button data-city="${id}" aria-pressed="${calState.city === id}">${esc(c.name)}</button>`).join("")}</div>
     ${cy.regions.length ? `<span class="step">地域</span>
@@ -1228,6 +1242,136 @@ function pickCity(id){
   renderPicker();
 }
 
+/* ===== 今いる場所から探す（GPS） =====
+   位置情報はスマホの中だけで使い、外には送らない。
+   町の境目データ（geo/towns.json：e-Stat 国勢調査の町丁・字等別境界データを加工）と照らし合わせて、
+   周南市は町名から地区の候補を、下松市は市の地図の境目の線から西地区・東地区を出す。 */
+const geo = {data:null, loading:null};
+const GEO_BORDER_M = 400;   // 下松市：境目の線からこれより近いときは「境目の近く」とする
+function loadGeo(){
+  if (!geo.loading){
+    geo.loading = fetch("geo/towns.json").then(r => { if (!r.ok) throw new Error("geo"); return r.json(); })
+      .then(d => { prepGeo(d); geo.data = d; return d; })
+      .catch(e => { geo.loading = null; throw e; });
+  }
+  return geo.loading;
+}
+// 10万分の1度の整数・差分で入っている座標を、経度・緯度に戻す
+function prepGeo(d){
+  const [bx, by] = d.base;
+  for (const cy of Object.values(d.cities)) for (const t of cy.towns){
+    t.rings = t.p.map(a => { const out = []; let x = 0, y = 0;
+      for (let i = 0; i < a.length; i += 2){ x += a[i]; y += a[i + 1]; out.push([bx + x / 1e5, by + y / 1e5]); }
+      return out; });
+    t.bb = [bx + t.b[0] / 1e5, by + t.b[1] / 1e5, bx + t.b[2] / 1e5, by + t.b[3] / 1e5];
+    delete t.p;
+  }
+}
+// 経度・緯度の差をメートルにする（この辺りの狭い範囲なので平面で計算）
+const toM = (lon, lat, lat0) => [lon * Math.cos(lat0 * Math.PI / 180) * 111320, lat * 110540];
+function segInfo(p, a, b){
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+  const k = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L)) : 0;
+  return {d: Math.hypot(p[0] - a[0] - k * dx, p[1] - a[1] - k * dy), cross: dx * (p[1] - a[1]) - dy * (p[0] - a[0])};
+}
+function inTown(t, lon, lat){
+  if (lon < t.bb[0] || lon > t.bb[2] || lat < t.bb[1] || lat > t.bb[3]) return false;
+  let inside = false;
+  for (const r of t.rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++){
+    const [xi, yi] = r[i], [xj, yj] = r[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// どの市のどの町にいるか。海沿いなどで少し外れたときは 300m 以内のいちばん近い町
+function locate(lon, lat){
+  const cities = geo.data.cities;
+  for (const [id, cy] of Object.entries(cities)) for (const t of cy.towns) if (inTown(t, lon, lat)) return {city:id, town:t, near:false};
+  const p = toM(lon, lat, lat);
+  let best = null;
+  for (const [id, cy] of Object.entries(cities)) for (const t of cy.towns){
+    if (lon < t.bb[0] - .005 || lon > t.bb[2] + .005 || lat < t.bb[1] - .005 || lat > t.bb[3] + .005) continue;
+    for (const r of t.rings) for (let i = 1; i < r.length; i++){
+      const d = segInfo(p, toM(r[i - 1][0], r[i - 1][1], lat), toM(r[i][0], r[i][1], lat)).d;
+      if (!best || d < best.d) best = {city:id, town:t, d};
+    }
+  }
+  return best && best.d <= 300 ? {city:best.city, town:best.town, near:true} : null;
+}
+// 下松市：境目の線（南西→北東）の左側（北西）が西地区
+function kudaSide(lon, lat, town){
+  if (town.side) return {side:town.side, d:Infinity};
+  const L = geo.data.cities.kudamatsu.line, p = toM(lon, lat, lat);
+  let best = null;
+  for (let i = 1; i < L.length; i++){
+    const s = segInfo(p, toM(L[i - 1][0], L[i - 1][1], lat), toM(L[i][0], L[i][1], lat));
+    if (!best || s.d < best.d) best = s;
+  }
+  return {side: best.cross > 0 ? "西地区" : "東地区", d: best.d};
+}
+function getPosition(){
+  // 動作確認用：URL に ?geo=34.0553,131.8071 のように付けると、その場所にいることにする
+  const m = location.search.match(/geo=([\d.]+),([\d.]+)/);
+  if (m) return Promise.resolve({lat:+m[1], lon:+m[2], acc:10});
+  return new Promise((ok, ng) => {
+    if (!navigator.geolocation) { ng({code:"none"}); return; }
+    navigator.geolocation.getCurrentPosition(
+      p => ok({lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy}), ng,
+      {enableHighAccuracy:true, timeout:20000, maximumAge:60000});
+  });
+}
+async function findByGps(){
+  calState.geo = {st:"wait"}; renderGeoBox();
+  try {
+    const [pos] = await Promise.all([getPosition(), loadGeo().catch(() => { throw {code:"data"}; })]);
+    const hit = locate(pos.lon, pos.lat);
+    if (!hit){ calState.geo = {st:"out"}; }
+    else {
+      const t = hit.town, g = {st:"ok", city:hit.city, name:t.n.replace(/^大字/, ""), near:hit.near, rough:pos.acc > 150};
+      if (hit.city === "kudamatsu"){
+        const s = kudaSide(pos.lon, pos.lat, t);
+        g.side = s.side; g.border = s.d < GEO_BORDER_M + Math.min(pos.acc, 500);
+      } else {
+        g.cands = t.c; g.region = t.r;
+      }
+      calState.geo = g;
+      calState.city = hit.city; calState.q = "";
+      calState.region = g.region || CITIES[hit.city].regions[0] || "";
+      if (!calState.area) useCity(hit.city);
+    }
+  } catch(e){
+    const code = e && e.code;
+    calState.geo = {st:"err", msg:
+      code === 1 ? "位置情報の利用が許可されていません。スマホの設定で、ブラウザ（Safari や Chrome）に位置情報の利用を許可してから、もう一度お試しください。"
+      : code === "none" ? "このブラウザでは現在地を使えません。下の一覧からえらんでください。"
+      : code === "data" ? "地図のデータを読み込めませんでした。電波のよい所で、もう一度お試しください。"
+      : "現在地が分かりませんでした。屋外や窓の近くで、もう一度お試しください。"};
+  }
+  renderPicker();
+}
+function geoBoxHtml(){
+  const g = calState.geo;
+  if (!g) return "";
+  if (g.st === "wait") return `<p class="geo-wait"><span class="spin"></span>現在地を調べています…</p>`;
+  if (g.st === "err") return `<div class="note-box geo-res">${esc(g.msg)}</div>`;
+  if (g.st === "out") return `<div class="note-box geo-res">周南市・下松市の外にいるようです。このアプリで使えるのは周南市と下松市だけです。下の一覧からえらんでください。</div>`;
+  const cy = CITIES[g.city], areas = cy.cal.areas;
+  const head = `<p class="geo-hd">📍 <b>${esc(cy.name)} ${esc(g.name)}</b> ${g.near ? "の近く" : "のあたり"}にいるようです</p>
+    ${g.rough ? `<p class="small">現在地の誤差が大きいので、ずれているかもしれません。</p>` : ""}`;
+  const row = (i, mark) => `<li><button data-area="${i}"><span class="nm2">${mark ? `<span class="city-badge geo-mark">${mark}</span>` : ""}${esc(areas[i].n)}${areas[i].d ? `<span class="desc">${esc(areas[i].d)}</span>` : ""}</span>${cy.schedLabel(areas[i].s) !== areas[i].n ? `<span class="s">${esc(cy.schedLabel(areas[i].s))}</span>` : ""}</button></li>`;
+  if (g.city === "kudamatsu"){
+    const order = areas.map((a, i) => i).sort((a, b) => (areas[b].s === g.side) - (areas[a].s === g.side));
+    return `<div class="geo-res">${head}
+      <p>${g.border ? `西地区と東地区の<b>境目の近く</b>です。市のごみカレンダーの地図で確かめてからえらんでください。` : `たぶん <b>${esc(g.side)}</b> です。合っていればタップしてください。`}</p>
+      <ul class="area-list">${order.map(i => row(i, !g.border && areas[i].s === g.side ? "たぶん" : "")).join("")}</ul></div>`;
+  }
+  return `<div class="geo-res">${head}
+    ${g.cands.length ? `<p>当てはまる地区をタップしてください。</p><ul class="area-list">${g.cands.map(i => row(i, "")).join("")}</ul>
+      <p class="small">見つからないときは、下の一覧（${esc(cy.regionName(g.region))}）から探してください。</p>`
+    : `<p>この辺りは地区が細かく分かれているので、下の一覧（${esc(cy.regionName(g.region))}）から探してください。</p>`}</div>`;
+}
+function renderGeoBox(){ const b = $("#geoBox"); if (b) b.innerHTML = geoBoxHtml(); }
+
 // 地区をえらんだとき：登録済みならそこへ切り替え、なければ追加して表示
 function setArea(a){
   const item = {c:calState.city, r:a.r || "", n:a.n, s:a.s};
@@ -1240,7 +1384,7 @@ function setArea(a){
 }
 function switchArea(i){
   calState.cur = i; saveAreas();
-  calState.picking = false; calState.q = ""; calState.city = calState.area.c; calState.month = null;
+  calState.picking = false; calState.q = ""; calState.city = calState.area.c; calState.month = null; calState.geo = null;
   renderCal(); render(); window.scrollTo({top:0});
 }
 function removeArea(i){
@@ -1288,7 +1432,8 @@ $("#view-cal").addEventListener("click", e => {
   }
   const ct = e.target.closest("[data-city]");
   if (ct){ pickCity(ct.dataset.city); return; }
-  if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; renderCal(); window.scrollTo({top:0}); return; }
+  if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; calState.geo = null; renderCal(); window.scrollTo({top:0}); return; }
+  if (e.target.closest("[data-geo]")){ findByGps(); return; }
   const sw = e.target.closest("[data-switch]");
   if (sw){ switchArea(+sw.dataset.switch); return; }
   const rm = e.target.closest("[data-remove]");
