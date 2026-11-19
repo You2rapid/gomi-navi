@@ -180,13 +180,15 @@ a{color:var(--accent)}
 .day-card .big .tag small{font-size:12px;font-weight:700;opacity:.85;margin-left:auto}
 .day-card .none{color:var(--muted);font-size:16px;padding:8px 2px}
 .moved{font-size:11px;font-weight:800;border-radius:4px;padding:1px 5px;background:var(--text);color:var(--bg);margin-left:4px;letter-spacing:.02em}
-/* 2列のとき：日付と「◯時まで」を2行に分けて、きょう・あしたの高さをそろえる（下松市は文字が長いため） */
+/* 「きょう 11/30（月）」と「朝8時30分までに出す」は、途中で折り返さない。
+   入りきらないときは「◯時まで」を次の行（右寄せ）に送る（下松市は文字が長いため） */
+.day-card .when{flex-wrap:wrap;row-gap:2px}
 .day-card .when b,.day-card .when span,.day-card .when em{white-space:nowrap}
-@media (min-width:521px){
-  .day-card .when{flex-wrap:wrap;row-gap:2px}
-  .day-card .when em{flex-basis:100%;margin-left:0}
-}
-.day-card .big .tag{flex-wrap:wrap}
+/* 2列のときは、日付と「◯時まで」をいつも2行に分けて、きょう・あしたの高さをそろえる */
+@media (min-width:521px){ .day-card .when em{flex-basis:100%;margin-left:0} }
+/* ごみの名前と袋の色が1行に入らないときは、袋の色を次の行（右寄せ）へ */
+.day-card .big .tag{flex-wrap:wrap;row-gap:2px}
+.day-card .big .tag .tn{white-space:nowrap}
 .day-card .note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
 
 .card{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:12px 14px;margin:0 0 12px}
@@ -1167,7 +1169,7 @@ function renderCal(){
       const em = i === 0 && cats.length ? (late ? `<b class="late">受付は終了</b>（${cut}まで）` : `${cut}までに出す`) : (i === 1 && cats.length ? `あすの${cut}まで` : "");
       return `<button class="day-card${i === 0 ? " today" : ""}" data-day="${ymd(d)}">
         <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em>${em}</em>` : ""}</div>
-        ${cats.length ? `<div class="big">${cats.map(c => `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}">${esc(LONG[c])}${mv.includes(c) ? `<span class="moved">振替</span>` : ""}<small>${esc(BAG[c])}</small></span>`).join("")}</div>`
+        ${cats.length ? `<div class="big">${cats.map(c => `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}"><span class="tn">${esc(LONG[c])}</span>${mv.includes(c) ? `<span class="moved">振替</span>` : ""}<small>${esc(BAG[c])}</small></span>`).join("")}</div>`
           : `<div class="none">収集はありません</div>`}
       </button>`;
     }).join("") + `</div>`;
