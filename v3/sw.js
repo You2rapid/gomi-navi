@@ -32,6 +32,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  // カメラ判定用の AI データ（ai/ 以下・約15MB）は中身が変わらないので、一度保存したらキャッシュを優先する
+  if (new URL(req.url).pathname.includes("/ai/")) {
+    event.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
+        return res;
+      }))
+    );
+    return;
+  }
   event.respondWith(
     fetch(req)
       .then((res) => {
