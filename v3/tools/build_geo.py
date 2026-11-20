@@ -5,13 +5,14 @@
 
 KML のフォルダには、e-Stat「統計地理情報システム」の境界データ
 （国勢調査 令和2年 小地域（町丁・字等別）、世界測地系 緯度経度、KML 形式）を置く。
-  r2ka35215.kml（周南市）・r2ka35207.kml（下松市）
+  r2ka35215.kml（周南市）・r2ka35207.kml（下松市）・r2ka35210.kml（光市）
   ※ダウンロードした .kmz は zip なので、中の .kml を取り出して上の名前にする。
 
 できるデータ:
   ・町丁ごとの境目（形を少し簡単にして、10万分の1度の整数・差分で保存）
   ・周南市：町丁ごとに、アプリの地区（index.html の GOMI_CAL.areas）の候補
   ・下松市：西地区・東地区の境目の線（市のごみカレンダーのページにある地図「sinai.jpg」から読み取った、おおまかな線）
+  ・光市：町丁ごとに、アプリの地区（index.html の GOMI_CAL_HIKARI.areas）の候補（収集カレンダーに書いてある住所から）
 
 出典：政府統計の総合窓口（e-Stat）国勢調査（令和2年）町丁・字等別境界データ を加工して作成。
 """
@@ -37,6 +38,36 @@ ALIAS = {"櫛ケ浜": ["櫛浜"], "須万": ["須金"], "金峰": ["須金"], "�
          "高瀬": ["和田"], "夏切": ["和田"], "垰": ["和田"], "米光": ["和田"], "馬神": ["和田"], "福川羽島": ["羽島"],
          "一番町": ["一番丁"]}
 KANSUJI = "〇一二三四五六七八九"
+
+# 光市：e-Stat の町名（大字を除いた名前の先頭）→ 地区。「一部」と書かれた町は2つの地区の候補を出す
+HIKARI_TOWNS = [
+    ("光井一丁目", ["室積地区", "光井地区"]), ("室積村", ["室積地区", "光井地区"]),
+    ("室積", ["室積地区"]), ("千坊台", ["室積地区"]),
+    ("光井", ["光井地区"]), ("中央", ["光井地区"]),
+    ("島田駅上", ["島田地区", "三島・周防・中島田地区"]), ("島田", None),   # 「大字島田」は2地区、「島田○丁目」は島田地区
+    ("協和町", ["浅江地区（JR線路から北側）"]), ("宝町", ["浅江地区（JR線路から北側）"]), ("中村町", ["浅江地区（JR線路から北側）"]),
+    ("虹ケ丘", ["浅江地区（JR線路から北側）"]), ("丸山町", ["浅江地区（JR線路から北側）"]), ("宮ノ下町", ["浅江地区（JR線路から北側）"]),
+    ("和田町", ["浅江地区（JR線路から北側）"]), ("光ケ丘", ["浅江地区（JR線路から北側）"]),
+    ("虹ケ浜", ["浅江地区（JR線路から南側）"]), ("木園", ["浅江地区（JR線路から南側）"]), ("花園", ["浅江地区（JR線路から南側）"]),
+    ("浅江", None),   # 「大字浅江」は北側、「浅江○丁目」は南側
+    ("三井", ["三島・周防・中島田地区"]), ("岩狩", ["三島・周防・中島田地区"]), ("小周防", ["三島・周防・中島田地区"]),
+    ("立野", ["三島・周防・中島田地区"]), ("上島田", ["三島・周防・中島田地区"]), ("中島田", ["三島・周防・中島田地区"]),
+    ("岩田", ["大和地区"]), ("塩田", ["大和地区"]), ("三輪", ["大和地区"]), ("束荷", ["大和地区"]),
+]
+
+def hikari_candidates(name, areas):
+    idx = {a["n"]: i for i, a in enumerate(areas)}
+    n = name.replace("大字", "")
+    for key, names in HIKARI_TOWNS:
+        if not n.startswith(key):
+            continue
+        if names is None:
+            if key == "島田":
+                names = ["島田地区"] if "丁目" in n else ["島田地区", "三島・周防・中島田地区"]
+            else:   # 浅江
+                names = ["浅江地区（JR線路から南側）"] if "丁目" in n else ["浅江地区（JR線路から北側）"]
+        return [idx[x] for x in names]
+    return []   # 牛島など、カレンダーに書かれていない所
 
 def parse_kml(path):
     t = Path(path).read_text(encoding="utf-8")
@@ -193,16 +224,27 @@ def main():
         kd.append({"n": t["name"], "b": bbox(rings), "p": [encode(rg) for rg in rings], **({"side": side} if side else {})})
     out["cities"]["kudamatsu"] = {"towns": kd, "line": KUDA_LINE}
 
+    # 光市
+    hcal = json.loads(re.search(r"window\.GOMI_CAL_HIKARI = /\*HIKARI-DATA-START\*/(.*?)/\*HIKARI-DATA-END\*/", html, re.S).group(1))
+    towns = [t for t in parse_kml(kml_dir / "r2ka35210.kml") if t["name"]]
+    hk = []
+    for t in towns:
+        rings = [simplify(rg, TOL) for rg in t["rings"]]
+        hk.append({"n": t["name"], "c": hikari_candidates(t["name"], hcal["areas"]), "b": bbox(rings), "p": [encode(rg) for rg in rings]})
+    out["cities"]["hikari"] = {"towns": hk}
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
-    # 確認用の一覧（周南市の町 → アプリの地区の候補）
+    # 確認用の一覧（周南市・光市の町 → アプリの地区の候補）
     if len(sys.argv) < 5:
-        print("towns", len(sh), len(kd), "bytes", out_path.stat().st_size); return
+        print("towns", len(sh), len(kd), len(hk), "bytes", out_path.stat().st_size); return
     with open(sys.argv[4], "w", encoding="utf-8") as f:
         for t in sh:
             f.write(f"{t['n']}\t{t['r']}\t{' / '.join(areas[j]['n'] + '(' + areas[j]['s'] + ')' for j in t['c'])}\n")
-    print("towns", len(sh), len(kd), "bytes", out_path.stat().st_size)
+        for t in hk:
+            f.write(f"光市 {t['n']}\t\t{' / '.join(hcal['areas'][j]['n'] for j in t['c'])}\n")
+    print("towns", len(sh), len(kd), len(hk), "bytes", out_path.stat().st_size)
 
 if __name__ == "__main__":
     main()
