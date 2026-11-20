@@ -2,17 +2,16 @@
 // ・ネットにつながるときは最新版を取得してキャッシュを更新（ネットワーク優先）
 // ・つながらないときはキャッシュから表示
 // ファイル構成を変えたときは VERSION を上げてください。
+// 自治体ごとのデータ（data/<県>/<自治体>/）と地図（geo/）は、一度開いたものが下のしくみで保存される。
 // 同じサイトにある旧版（gomi-v1・gomi2-）のキャッシュを消さないよう、名前は "gomi3-" で始める。
 const PREFIX = "gomi3-";
-const VERSION = PREFIX + "v2";
+const VERSION = PREFIX + "v3";
 const FILES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./data/municipalities.js",
   "./data/holidays.js",
-  "./data/calendar_shunan.js",
-  "./data/calendar_kudamatsu.js",
-  "./data/calendar_hikari.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-192.png",

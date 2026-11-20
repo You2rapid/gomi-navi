@@ -1,20 +1,23 @@
-"""下松市「家庭ごみ収集カレンダー（A4・月ごと）」PDF から収集日データを作る。
+"""山口県 下松市（35207）：「家庭ごみ収集カレンダー（A4・月ごと）」PDF から収集日データを作る。
 
-使い方（ふだんは tools/update_year.py から呼ばれる）:
-  python tools/extract_kudamatsu.py <PDFのフォルダ> <年度（西暦）> [出力先.js]
-  出力先を省くと data/calendar_kudamatsu.js に書く。
+このファイルのきまり（どの自治体も同じ形。tools/update_year.py・download_sources.py から使う）:
+  NEED                       … 元データ/<県>/<自治体>/<年度>年度/ に置くファイルの名前
+  download(year, dest, web, plan) … 市のサイトから NEED のファイルを探して plan に入れる（web は tools/lib/web.py）
+  make_calendar(src, year)   … src（上のフォルダ）のファイルから収集日データ（dict）を作る。読めなければ例外で止める
 
 フォルダには市のサイトからダウンロードした「A4・月ごと」のカレンダーを
 nishi.pdf（西地区。令和8年度は r8nishia4.pdf）・higashi.pdf（東地区。r8higashia4.pdf）の名前で置く。
 PDF の文字は図形（アウトライン）になっているので、文字の図形の「色」と「点の数」から
 ごみの種類を見分ける。見分けられない図形があれば標準エラーに出す。
 """
-import calendar, datetime as dt, json, sys
+import calendar, datetime as dt, json, re, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 import pymupdf
 
 FILES = {"西地区": "nishi.pdf", "東地区": "higashi.pdf"}
+NEED = list(FILES.values())
+PAGE = "https://www.city.kudamatsu.lg.jp/kankyou/seikatsu/kankyou/kannrikakari/gomikarenda.html"
 YEAR = 2026   # 実行するときに年度で上書きする
 COLS = [51, 107, 233, 360, 487, 612, 740, 794]   # 日〜土 の列の境目
 ROW_TOP, ROW_H = 162, 71.3                         # 1週目の上端と週の高さ
@@ -113,11 +116,23 @@ def rules(days):
             out[c] = f"{n} {wtxt}曜日" if len(wds) == 1 else f"{n}（日はカレンダーで確認）"
     return out
 
-if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8")
-    folder = Path(sys.argv[1])
-    YEAR = int(sys.argv[2])
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+def download(year, dest, web, plan):
+    # 「A4・月ごと」の版：r○nishia4.pdf / r○higashia4.pdf（○は令和の年）
+    reiwa = year - 2018
+    page = web.text(web.get(PAGE))
+    for key, fn in (("nishi", "nishi.pdf"), ("higashi", "higashi.pdf")):
+        found = [u for u, _ in web.links(page, PAGE) if re.search(rf"/r{reiwa}{key}a4\.pdf$", u, re.I)]
+        if found:
+            plan.add(found[0], dest / fn)
+        else:
+            others = sorted({u.rsplit("/", 1)[-1] for u, _ in web.links(page, PAGE) if key in u and u.endswith(".pdf")})
+            plan.problem(f"r{reiwa}{key}a4.pdf が {PAGE} に見つかりません（あったもの：{', '.join(others) or 'なし'}）")
+
+
+def make_calendar(folder, year):
+    global YEAR
+    folder = Path(folder)
+    YEAR = year
     res = {"year": YEAR, "schedules": {}, "areas": [
         {"r": "", "n": "西地区", "s": "西地区", "y": "にしちく",
          "d": "花岡地区・米川地区の全域、久保地区の岩徳線より北、末武地区の平田川より西"},
@@ -131,8 +146,6 @@ if __name__ == "__main__":
             "days": {k: sorted(v, key=ORDER.index) for k, v in sorted(days.items())},
             "moved": {},
         }
-    from datafile import write_calendar
-    out = write_calendar("kudamatsu", res, "tools/extract_kudamatsu.py", sys.argv[3] if len(sys.argv) > 3 else None)
     for name, sc in res["schedules"].items():
         print(name, len(sc["days"]), "日", sc["rules"])
-    print("wrote", out)
+    return res

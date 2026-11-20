@@ -1,252 +1,88 @@
-"""「今いる場所から探す」用の小さな地図データ（geo/towns.json）を作る。
+"""「今いる場所から探す」用の地図データを、県ごとに作る。
 
-使い方:
-  python tools/build_geo.py <KMLのフォルダ> geo/towns.json [確認用の一覧.txt]
-  （ふだんは tools/update_year.py から呼ばれる。KML は 元データ/地図/ にある）
+使い方（gomi フォルダで実行。ふだんは tools/update_year.py から呼ばれる）:
+  python v3/tools/build_geo.py              ← すべての県
+  python v3/tools/build_geo.py 35           ← 県コードを指定
+  python v3/tools/build_geo.py 35 --list    ← 確認用に「町 → 地区の候補」の一覧も出す（v3/geo/<県>_check.txt）
 
-KML のフォルダには、e-Stat「統計地理情報システム」の境界データ
-（国勢調査 令和2年 小地域（町丁・字等別）、世界測地系 緯度経度、KML 形式）を置く。
-  r2ka35215.kml（周南市）・r2ka35207.kml（下松市）・r2ka35210.kml（光市）
-  ※ダウンロードした .kmz は zip なので、中の .kml を取り出して上の名前にする。
+できるもの:
+  v3/geo/<県コード>_<県>.json … その県の自治体の町丁ごとの境目（形を少し簡単にして、10万分の1度の整数・差分で保存）と、
+                                 アプリの地区との対応（自治体ごとの tools/munis/<県>/<自治体>/geo.py で決める）
+  v3/geo/index.json           … 県の一覧と範囲（アプリは、現在地をふくむ県のファイルだけを読む）
 
-できるデータ:
-  ・町丁ごとの境目（形を少し簡単にして、10万分の1度の整数・差分で保存）
-  ・周南市：町丁ごとに、アプリの地区（data/calendar_shunan.js の areas）の候補
-  ・下松市：西地区・東地区の境目の線（市のごみカレンダーのページにある地図「sinai.jpg」から読み取った、おおまかな線）
-  ・光市：町丁ごとに、アプリの地区（data/calendar_hikari.js の areas）の候補（収集カレンダーに書いてある住所から）
-
+地図は e-Stat「統計地理情報システム」の境界データ（国勢調査 令和2年 小地域（町丁・字等別）、世界測地系 緯度経度、KML）。
+元データ/<県>/<自治体>/地図/r2ka<自治体コード>.kml に置く（ダウンロードした .kmz は zip なので、中の .kml を取り出してこの名前にする）。
 出典：政府統計の総合窓口（e-Stat）国勢調査（令和2年）町丁・字等別境界データ を加工して作成。
 """
-import json, math, re, sys
+import json
+import math
+import sys
 from pathlib import Path
 
-BASE = (131.6, 33.9)   # 座標の基準（10万分の1度の整数にするときに引く）
-TOL = 0.00008          # 形を簡単にするときの許容（度。約8m）
+sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import munis as M  # noqa: E402
+from geo import TOL, bbox, encode, parse_kml, simplify  # noqa: E402
 
-# 下松市の西地区／東地区の境目（南西の海側 → 北東の市境の外）。経度, 緯度
-KUDA_LINE = [[131.8400, 33.9950], [131.85026, 34.0076], [131.85242, 34.01112], [131.85458, 34.0158], [131.85674, 34.01903],
-    [131.85891, 34.02195], [131.86107, 34.0243], [131.86323, 34.02635], [131.8654, 34.02811], [131.86756, 34.02986],
-    [131.86972, 34.03133], [131.87189, 34.03308], [131.87405, 34.03396], [131.87621, 34.03514], [131.87837, 34.03601],
-    [131.88054, 34.03689], [131.8827, 34.03806], [131.88486, 34.03894], [131.88703, 34.03953], [131.88919, 34.04011],
-    [131.89135, 34.0407], [131.89351, 34.04129], [131.89568, 34.04158], [131.89784, 34.04217], [131.9, 34.04275],
-    [131.90433, 34.04334], [131.90866, 34.04392], [131.91298, 34.04422], [131.91731, 34.04451], [131.93028, 34.0448], [131.9700, 34.0448]]
-# 地図の説明で、線とは別に地区が決まっている町（凡例「東陽地区」は西地区、「笠戸島地区」は東地区）
-KUDA_SIDE = {"東陽": "西地区", "笠戸島": "東地区"}
+SOURCE = "e-Stat 国勢調査（令和2年）町丁・字等別境界データを加工"
 
-# 周南市：e-Stat の町名とアプリの地区名で呼び方がちがうもの
-ALIAS = {"櫛ケ浜": ["櫛浜"], "須万": ["須金"], "金峰": ["須金"], "鹿野上": ["鹿野地域"], "鹿野中": ["鹿野地域"],
-         "鹿野下": ["鹿野地域"], "大潮": ["鹿野地域"], "巣山": ["鹿野地域"], "須万鹿野": ["鹿野地域"], "金峰鹿野": ["鹿野地域"],
-         "高瀬": ["和田"], "夏切": ["和田"], "垰": ["和田"], "米光": ["和田"], "馬神": ["和田"], "福川羽島": ["羽島"],
-         "一番町": ["一番丁"]}
-KANSUJI = "〇一二三四五六七八九"
 
-# 光市：e-Stat の町名（大字を除いた名前の先頭）→ 地区。「一部」と書かれた町は2つの地区の候補を出す
-HIKARI_TOWNS = [
-    ("光井一丁目", ["室積地区", "光井地区"]), ("室積村", ["室積地区", "光井地区"]),
-    ("室積", ["室積地区"]), ("千坊台", ["室積地区"]),
-    ("光井", ["光井地区"]), ("中央", ["光井地区"]),
-    ("島田駅上", ["島田地区", "三島・周防・中島田地区"]), ("島田", None),   # 「大字島田」は2地区、「島田○丁目」は島田地区
-    ("協和町", ["浅江地区（JR線路から北側）"]), ("宝町", ["浅江地区（JR線路から北側）"]), ("中村町", ["浅江地区（JR線路から北側）"]),
-    ("虹ケ丘", ["浅江地区（JR線路から北側）"]), ("丸山町", ["浅江地区（JR線路から北側）"]), ("宮ノ下町", ["浅江地区（JR線路から北側）"]),
-    ("和田町", ["浅江地区（JR線路から北側）"]), ("光ケ丘", ["浅江地区（JR線路から北側）"]),
-    ("虹ケ浜", ["浅江地区（JR線路から南側）"]), ("木園", ["浅江地区（JR線路から南側）"]), ("花園", ["浅江地区（JR線路から南側）"]),
-    ("浅江", None),   # 「大字浅江」は北側、「浅江○丁目」は南側
-    ("三井", ["三島・周防・中島田地区"]), ("岩狩", ["三島・周防・中島田地区"]), ("小周防", ["三島・周防・中島田地区"]),
-    ("立野", ["三島・周防・中島田地区"]), ("上島田", ["三島・周防・中島田地区"]), ("中島田", ["三島・周防・中島田地区"]),
-    ("岩田", ["大和地区"]), ("塩田", ["大和地区"]), ("三輪", ["大和地区"]), ("束荷", ["大和地区"]),
-]
-
-def hikari_candidates(name, areas):
-    idx = {a["n"]: i for i, a in enumerate(areas)}
-    n = name.replace("大字", "")
-    for key, names in HIKARI_TOWNS:
-        if not n.startswith(key):
+def build_pref(pref, ms, check=False):
+    cities, all_towns = {}, []
+    for m in ms:
+        mod = m.module("geo")
+        kml = m.src_dir / "地図" / f"r2ka{m.code}.kml"
+        if not mod:
+            print(f"  {m}：geo.py がないので、今いる場所から探すの対象外")
             continue
-        if names is None:
-            if key == "島田":
-                names = ["島田地区"] if "丁目" in n else ["島田地区", "三島・周防・中島田地区"]
-            else:   # 浅江
-                names = ["浅江地区（JR線路から南側）"] if "丁目" in n else ["浅江地区（JR線路から北側）"]
-        return [idx[x] for x in names]
-    return []   # 牛島など、カレンダーに書かれていない所
+        if not kml.exists():
+            raise SystemExit(f"{m}：地図がありません（{kml}）")
+        cal = m.read("calendar")
+        towns = [t for t in parse_kml(kml) if t["name"]]
+        info = mod.town_info(towns, cal)
+        for t in towns:
+            t["rings"] = [simplify(rg, TOL) for rg in t["rings"]]
+        cities[m.code] = (m, towns, info, mod.extra(cal), cal)
+        all_towns += towns
+    if not cities:
+        return None
+    xs = [p[0] for t in all_towns for r in t["rings"] for p in r]
+    ys = [p[1] for t in all_towns for r in t["rings"] for p in r]
+    base = [math.floor(min(xs) * 10) / 10, math.floor(min(ys) * 10) / 10]   # 座標の基準（10万分の1度の整数にするときに引く）
+    out = {"base": base, "source": SOURCE, "cities": {}}
+    lines = []
+    for code, (m, towns, info, extra, cal) in cities.items():
+        ts = [{"n": t["name"], **inf, "b": bbox(t["rings"], base), "p": [encode(rg, base) for rg in t["rings"]]} for t, inf in zip(towns, info)]
+        out["cities"][code] = {"towns": ts, **extra}
+        print(f"  {m}：町丁 {len(ts)}")
+        for t in ts:
+            if "c" in t:
+                lines.append(f"{m.name} {t['n']}\t{t.get('r', '')}\t{' / '.join(cal['areas'][j]['n'] for j in t['c'])}")
+    fn = f"{pref['code']}_{pref['slug']}.json"
+    (M.GEO / fn).write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    if check:
+        (M.GEO / f"{pref['code']}_check.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"code": pref["code"], "name": pref["name"], "file": fn,
+            "bbox": [round(min(xs), 4), round(min(ys), 4), round(max(xs), 4), round(max(ys), 4)]}
 
-def parse_kml(path):
-    t = Path(path).read_text(encoding="utf-8")
-    out = []
-    for pm in re.findall(r"<Placemark>(.*?)</Placemark>", t, re.S):
-        d = dict(re.findall(r'<SimpleData name="(\w+)">(.*?)</SimpleData>', pm))
-        rings = []
-        for poly in re.findall(r"<Polygon>(.*?)</Polygon>", pm, re.S):
-            for kind, body in re.findall(r"<(outer|inner)BoundaryIs>.*?<coordinates>(.*?)</coordinates>", poly, re.S):
-                rings.append([tuple(map(float, p.split(",")[:2])) for p in body.split()])
-        out.append({"name": d.get("S_NAME", ""), "x": float(d["X_CODE"]), "y": float(d["Y_CODE"]), "rings": rings})
-    return out
-
-def simplify(pts, tol):
-    # ダグラス・ポーカー法（閉じた線は2つに分けて処理）
-    if len(pts) < 5:
-        return pts
-    keep = [False] * len(pts); keep[0] = keep[-1] = True
-    far = max(range(len(pts)), key=lambda i: (pts[i][0] - pts[0][0]) ** 2 + (pts[i][1] - pts[0][1]) ** 2)
-    keep[far] = True
-    stack = [(0, far), (far, len(pts) - 1)]
-    while stack:
-        a, b = stack.pop()
-        if b <= a + 1:
-            continue
-        (x1, y1), (x2, y2) = pts[a], pts[b]
-        dx, dy = x2 - x1, y2 - y1; L = math.hypot(dx, dy) or 1e-12
-        best, bi = -1, -1
-        for i in range(a + 1, b):
-            d = abs(dy * (pts[i][0] - x1) - dx * (pts[i][1] - y1)) / L
-            if d > best:
-                best, bi = d, i
-        if best > tol:
-            keep[bi] = True; stack += [(a, bi), (bi, b)]
-    out = [p for p, k in zip(pts, keep) if k]
-    return out if len(out) >= 4 else pts
-
-def encode(ring):
-    # 10万分の1度の整数にして、1つ前の点との差で並べる（ファイルを小さくするため）
-    out, px, py = [], 0, 0
-    for x, y in ring:
-        ix, iy = round((x - BASE[0]) * 1e5), round((y - BASE[1]) * 1e5)
-        out += [ix - px, iy - py]; px, py = ix, iy
-    return out
-
-def bbox(rings):
-    xs = [p[0] for r in rings for p in r]; ys = [p[1] for r in rings for p in r]
-    return [round((min(xs) - BASE[0]) * 1e5), round((min(ys) - BASE[1]) * 1e5), round((max(xs) - BASE[0]) * 1e5), round((max(ys) - BASE[1]) * 1e5)]
-
-def kanji_num(n):
-    return {1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}[n]
-
-def area_keys(name):
-    # アプリの地区名から、e-Stat の町名と照らし合わせるための名前を作る
-    base = re.sub(r"[（(].*?[）)]", "", name).strip()
-    note = "".join(re.findall(r"[（(](.*?)[）)]", name))
-    base = re.sub(r"(\d)丁目", lambda m: kanji_num(int(m.group(1))) + "丁目", base)
-    keys = set()
-    m = re.match(r"(.+?)([一二三四五六七八九])丁目～([一二三四五六七八九])丁目$", base)
-    if m:
-        for i in range(KANSUJI.index(m.group(2)), KANSUJI.index(m.group(3)) + 1):
-            keys.add(m.group(1) + KANSUJI[i] + "丁目")
-    else:
-        for part in re.split(r"・", base):
-            keys.add(part)
-        m2 = re.match(r"(.+?)([上中下東西])$", base.split("・")[0])
-        if "・" in base and m2:   # 石光上・中・下 → 石光上, 石光中, 石光下
-            for s in base.split("・")[1:]:
-                keys.add(m2.group(1) + s)
-            keys.add(m2.group(1))
-    if "大字富田" in note:
-        keys.add("富田" + base)
-    for k in list(keys):
-        keys.add(re.sub(r"(全域|地域).*$", "", k))
-    return {k for k in keys if len(k) >= 2}, note
-
-def estat_pieces(name):
-    n = name.replace("大字", "")
-    pieces = [n] + n.split("字")
-    pieces += [re.sub(r"[一二三四五六七八九十]+丁目$", "", p) for p in list(pieces)]
-    if n.startswith("徳山字"):
-        pieces.append(n[3:])
-    # 「大字徳山」の「徳山」だけでは、どの地区か決められない（徳山港町などに当たってしまう）
-    return [p for p in dict.fromkeys(pieces) if len(p) >= 2 and p != "徳山"]
-
-def shunan_candidates(towns, areas):
-    akeys = [area_keys(a["n"]) for a in areas]
-    res = []
-    for t in towns:
-        pieces = estat_pieces(t["name"])
-        for p in list(pieces):
-            if p in ALIAS:                 # 呼び方がちがう町（完全に同じ名前を先に）
-                pieces += ALIAS[p]
-            else:
-                for k, v in ALIAS.items():
-                    if p.startswith(k) and not any(q in ALIAS for q in pieces):
-                        pieces += v
-        cands = []
-        for i, (keys, note) in enumerate(akeys):
-            score = -1 if pieces and pieces[0] in keys and "丁目" in pieces[0] else None   # 「○○一丁目」まで同じ
-            for p in pieces:
-                for k in keys:
-                    if p == k:
-                        s = 0
-                    elif p.startswith(k) and len(k) >= 2:
-                        s = 1      # 例：須々万本郷 → 須々万
-                    else:
-                        continue
-                    score = s if score is None else min(score, s)
-            if score is not None:
-                # 「一部：○○」に e-Stat の小さな字名が書いてあれば、それを先に
-                if note and any(q in note for q in pieces[1:] if len(q) >= 2):
-                    score -= 0.5
-                cands.append((score, i))
-        best = min((s for s, _ in cands), default=None)
-        cands = sorted(c for c in cands if c[0] <= best + 0.5) if cands else []
-        res.append([i for _, i in cands])
-    return res
 
 def main():
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from datafile import read_calendar
-    kml_dir, out_path = Path(sys.argv[1]), Path(sys.argv[2])
-    cal = read_calendar("shunan")
-    areas = cal["areas"]
-    out = {"base": BASE, "source": "e-Stat 国勢調査（令和2年）町丁・字等別境界データを加工", "cities": {}}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    M.GEO.mkdir(exist_ok=True)
+    idx_path = M.GEO / "index.json"
+    index = json.loads(idx_path.read_text(encoding="utf-8")) if idx_path.exists() else {"prefs": []}
+    have = {p["code"]: p for p in index["prefs"]}
+    for pref in M.prefs():
+        if args and pref["code"] not in args:
+            continue
+        print(f"== {pref['name']}")
+        r = build_pref(pref, [m for m in M.munis() if m.pref == pref["code"]], "--list" in sys.argv)
+        if r:
+            have[pref["code"]] = r
+    index = {"source": SOURCE, "prefs": [have[k] for k in sorted(have)]}
+    idx_path.write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("wrote", idx_path)
 
-    # 周南市
-    towns = [t for t in parse_kml(kml_dir / "r2ka35215.kml") if t["name"]]
-    cands = shunan_candidates(towns, areas)
-    # 地域（徳山・新南陽・熊毛・鹿野）：候補から決まらない町は、いちばん近い町に合わせる
-    region = [None] * len(towns)
-    for i, c in enumerate(cands):
-        rs = {areas[j]["r"] for j in c}
-        if len(rs) == 1:
-            region[i] = rs.pop()
-    known = [i for i in range(len(towns)) if region[i]]
-    for i in range(len(towns)):
-        if not region[i]:
-            j = min(known, key=lambda k: (towns[k]["x"] - towns[i]["x"]) ** 2 + (towns[k]["y"] - towns[i]["y"]) ** 2)
-            region[i] = region[j]
-        cands[i] = [j for j in cands[i] if areas[j]["r"] == region[i]]
-    sh = []
-    for t, c, r in zip(towns, cands, region):
-        rings = [simplify(rg, TOL) for rg in t["rings"]]
-        sh.append({"n": t["name"], "r": r, "c": c[:8], "b": bbox(rings), "p": [encode(rg) for rg in rings]})
-    out["cities"]["shunan"] = {"towns": sh}
-
-    # 下松市
-    towns = [t for t in parse_kml(kml_dir / "r2ka35207.kml") if t["name"]]
-    kd = []
-    for t in towns:
-        rings = [simplify(rg, TOL) for rg in t["rings"]]
-        side = next((v for k, v in KUDA_SIDE.items() if k in t["name"]), None)
-        kd.append({"n": t["name"], "b": bbox(rings), "p": [encode(rg) for rg in rings], **({"side": side} if side else {})})
-    out["cities"]["kudamatsu"] = {"towns": kd, "line": KUDA_LINE}
-
-    # 光市
-    hcal = read_calendar("hikari")
-    towns = [t for t in parse_kml(kml_dir / "r2ka35210.kml") if t["name"]]
-    hk = []
-    for t in towns:
-        rings = [simplify(rg, TOL) for rg in t["rings"]]
-        hk.append({"n": t["name"], "c": hikari_candidates(t["name"], hcal["areas"]), "b": bbox(rings), "p": [encode(rg) for rg in rings]})
-    out["cities"]["hikari"] = {"towns": hk}
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-
-    # 確認用の一覧（周南市・光市の町 → アプリの地区の候補）
-    if len(sys.argv) < 4:
-        print("towns", len(sh), len(kd), len(hk), "bytes", out_path.stat().st_size); return
-    with open(sys.argv[3], "w", encoding="utf-8") as f:
-        for t in sh:
-            f.write(f"{t['n']}\t{t['r']}\t{' / '.join(areas[j]['n'] + '(' + areas[j]['s'] + ')' for j in t['c'])}\n")
-        for t in hk:
-            f.write(f"光市 {t['n']}\t\t{' / '.join(hcal['areas'][j]['n'] for j in t['c'])}\n")
-    print("towns", len(sh), len(kd), len(hk), "bytes", out_path.stat().st_size)
 
 if __name__ == "__main__":
     main()

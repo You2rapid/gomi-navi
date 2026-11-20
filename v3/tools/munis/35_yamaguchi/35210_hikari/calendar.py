@@ -1,8 +1,9 @@
-"""光市「令和8年度 ごみ収集カレンダー」（地区ごとのPDF）から収集日を取り出す。
+"""山口県 光市（35210）：「ごみ収集カレンダー」（地区ごとのPDF）から収集日を取り出す。
 
-使い方（ふだんは tools/update_year.py から呼ばれる）:
-  python tools/extract_hikari.py <PDFのフォルダ> <年度（西暦）> [出力先.js]
-  出力先を省くと data/calendar_hikari.js に書く。
+このファイルのきまり（どの自治体も同じ形。tools/update_year.py・download_sources.py から使う）:
+  NEED                       … 元データ/<県>/<自治体>/<年度>年度/ に置くファイルの名前
+  download(year, dest, web, plan) … 市のサイトから NEED のファイルを探して plan に入れる（web は tools/lib/web.py）
+  make_calendar(src, year)   … src（上のフォルダ）のファイルから収集日データ（dict）を作る。読めなければ例外で止める
 
 フォルダには市のサイト（ごみ収集カレンダーのページ）からダウンロードした7つのPDFを
 murozumi.pdf・mitsui.pdf・shimata.pdf・asaekita.pdf・asaeminami.pdf・mishima.pdf・yamato.pdf の名前で置く
@@ -12,8 +13,7 @@ PDF の文字は図形（アウトライン）なので、
   ・日付：マスの左上の数字の形（図形の数）を読み、曜日が列と合うものを選ぶ
 読めないものがあれば止まる（どの月も全部の日がそろっているかも確かめる）。
 """
-import pymupdf, json, sys, glob, os, datetime, collections, itertools
-sys.stdout.reconfigure(encoding='utf-8')
+import pymupdf, json, re, sys, glob, os, datetime, collections, itertools
 
 DIGIT = {7: '17', 10: '2', 17: '3', 14: '4', 15: '5', 13: '69', 16: '8', 12: '0'}   # 図形の数 → 数字（1と7、6と9は同じ数）
 WHITE = (1.0, 1.0, 1.0)
@@ -139,9 +139,26 @@ def rules_and_moved(days):
             rules[c] = f'月{n}回 {wtxt}曜日'
     return rules, {k: sorted(v, key=ORDER.index) for k, v in sorted(moved.items())}
 
-if __name__ == '__main__':
-    year = int(sys.argv[2]); MONTHS = months_of(year)
-    files = {key: os.path.join(sys.argv[1], key + '.pdf') for key, *_ in AREAS}
+NEED = [key + '.pdf' for key, *_ in AREAS]
+PAGE = "https://www.city.hikari.lg.jp/kurashi_tetsuzuki/gomi/bunbetu/8851.html"
+
+
+def download(year, dest, web, plan):
+    # ○○1gomicalendermurozumi.pdf など（先頭の2けたが令和の年。令和8年度は 081〜087）
+    reiwa = year - 2018
+    page = web.text(web.get(PAGE))
+    for key, *_ in AREAS:
+        found = [u for u, _ in web.links(page, PAGE) if re.search(rf"/{reiwa:02d}\dgomicalender{key}\.pdf$", u, re.I)]
+        if found:
+            plan.add(found[0], dest / f"{key}.pdf")
+        else:
+            others = sorted({u.rsplit("/", 1)[-1] for u, _ in web.links(page, PAGE) if key in u})
+            plan.problem(f"{reiwa:02d}?gomicalender{key}.pdf が {PAGE} に見つかりません（あったもの：{', '.join(others) or 'なし'}）")
+
+
+def make_calendar(folder, year):
+    MONTHS = months_of(year)
+    files = {key: os.path.join(folder, key + '.pdf') for key, *_ in AREAS}
     res = {'year': year, 'schedules': {}, 'areas': []}
     for key, name, yomi, desc in AREAS:
         doc = pymupdf.open(files[key]); days = {}
@@ -152,6 +169,4 @@ if __name__ == '__main__':
                                   'moved': moved, **({'cut': CUT[key]} if key in CUT else {})}
         res['areas'].append({'r': '', 'n': name, 's': name, 'y': yomi, 'd': desc})
         print(name, len(days), '日', rules, '振替', len(moved))
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from datafile import write_calendar
-    print('wrote', write_calendar('hikari', res, 'tools/extract_hikari.py', sys.argv[3] if len(sys.argv) > 3 else None))
+    return res

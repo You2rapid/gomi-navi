@@ -11,4 +11,4 @@ Windows 標準の日本語 OCR で読み取り、読み違いを手で直して 
 6. `final_hikari.py`：濁点の抜けなどの読み違いを直し、読み（pykakasi）を付けて `items_hikari.json` を作る
 
 スクリプトの中のフォルダの場所は、作ったときの作業フォルダのまま。
-収集日（カレンダー）は `tools/extract_hikari.py` で作る（こちらは毎年使う）。
+収集日（カレンダー）は `../calendar.py` で作る（毎年 tools/update_year.py から使う）。できた品目は `v3/data/35_yamaguchi/35210_hikari/items.js`（1行に1品目）。

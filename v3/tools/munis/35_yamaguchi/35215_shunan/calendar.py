@@ -1,14 +1,15 @@
-"""周南市「ごみ収集カレンダー」PDF から収集日データを作り、index.html に書き込む。
+"""山口県 周南市（35215）：「ごみ収集カレンダー」PDF から収集日データを作る。
 
-使い方（ふだんは tools/update_year.py から呼ばれる）:
-  python tools/extract_calendar.py <PDFとHTMLのフォルダ> <年度（西暦）> [出力先.js]
-  出力先を省くと data/calendar_shunan.js に書く。
+このファイルのきまり（どの自治体も同じ形。tools/update_year.py・download_sources.py から使う）:
+  NEED                       … 元データ/<県>/<自治体>/<年度>年度/ に置くファイルの名前
+  download(year, dest, web, plan) … 市のサイトから NEED のファイルを探して plan に入れる（web は tools/lib/web.py）
+  make_calendar(src, year)   … src（上のフォルダ）のファイルから収集日データ（dict）を作る。読めなければ例外で止める
 
 フォルダには次を置く（市のサイトからダウンロード）:
   A.pdf ～ H.pdf, otsushima.pdf, tokuyama_sankan.pdf, wada_sankan.pdf
   tokuyama.html（徳山）, shinnanyo.html（新南陽）, kumage.html（熊毛）, kano.html（鹿野）
   （市のサイトの「令和○年度ごみ収集カレンダー（徳山）」などのページを保存したもの。
-    町名と日程の対応表が載っている。tools/download_sources.py で自動で保存できる）
+    町名と日程の対応表が載っている）
 
 カレンダーのマス目は、色付きの図形（ベクター）で描かれているので、
 その色から「その日に何ごみが出せるか」を読み取る。
@@ -334,11 +335,42 @@ def add_readings(areas):
         a["y"] = "".join(x["hira"] for x in kks.convert(name))
 
 
-def main():
+NEED = [f for f in SCHEDULES.values()] + ["tokuyama.html", "shinnanyo.html", "kumage.html"]
+
+# ダウンロード元：リサイクル推進課のページに「令和○年度ごみ収集カレンダー（徳山）」などのページがある
+INDEX = "https://www.city.shunan.lg.jp/soshiki/19/"
+PAGES = {"徳山": "tokuyama.html", "新南陽": "shinnanyo.html", "熊毛": "kumage.html", "鹿野": "kano.html"}
+PDFS = {  # (どのページ, リンクの文字) → 保存する名前
+    ("徳山", "A日程"): "A.pdf", ("徳山", "B日程"): "B.pdf", ("徳山", "C日程"): "C.pdf", ("徳山", "D日程"): "D.pdf",
+    ("徳山", "E日程"): "E.pdf", ("徳山", "F日程"): "F.pdf", ("徳山", "G日程"): "G.pdf", ("徳山", "H日程"): "H.pdf",
+    ("徳山", "大津島"): "otsushima.pdf", ("徳山", "徳山山間"): "tokuyama_sankan.pdf", ("新南陽", "和田山間"): "wada_sankan.pdf",
+}
+
+
+def download(year, dest, web, plan):
+    reiwa = year - 2018
+    idx = web.text(web.get(INDEX))
+    for region, fn in PAGES.items():
+        hit = [u for u, t in web.links(idx, INDEX) if f"令和{reiwa}年度ごみ収集カレンダー（{region}）" in t]
+        if not hit:
+            plan.problem(f"「令和{reiwa}年度ごみ収集カレンダー（{region}）」のページが {INDEX} に見つかりません")
+            continue
+        raw = web.get(hit[0])
+        plan.add(hit[0], dest / fn, raw)
+        for (pg, label), pdf in PDFS.items():
+            if pg != region:
+                continue
+            found = [u for u, t in web.links(web.text(raw), hit[0]) if u.lower().endswith(".pdf") and t.startswith(label)]
+            if found:
+                plan.add(found[0], dest / pdf)
+            else:
+                plan.problem(f"{hit[0]} に「{label}」のPDFが見つかりません")
+
+
+def make_calendar(folder, year):
     global FISCAL_YEAR
-    folder = Path(sys.argv[1])
-    FISCAL_YEAR = int(sys.argv[2])
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    folder = Path(folder)
+    FISCAL_YEAR = year
     sched_data = {}
     for key, fn in SCHEDULES.items():
         if key in MOUNTAIN_RULES:
@@ -363,11 +395,4 @@ def main():
         print("   特別:", {k: v for k, v in extra.items() if v})
     areas = read_areas(folder)
     print("areas", len(areas), Counter(a["s"] for a in areas))
-    from datafile import write_calendar
-    out = write_calendar("shunan", {"year": FISCAL_YEAR, "schedules": sched_data, "areas": areas},
-                         "tools/extract_calendar.py", sys.argv[3] if len(sys.argv) > 3 else None)
-    print("wrote", out)
-
-
-if __name__ == "__main__":
-    main()
+    return {"year": FISCAL_YEAR, "schedules": sched_data, "areas": areas}
