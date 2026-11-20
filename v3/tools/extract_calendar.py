@@ -1,11 +1,14 @@
 """周南市「ごみ収集カレンダー」PDF から収集日データを作り、index.html に書き込む。
 
-使い方:
-  python tools/extract_calendar.py <PDFとHTMLのフォルダ> index.html
+使い方（ふだんは tools/update_year.py から呼ばれる）:
+  python tools/extract_calendar.py <PDFとHTMLのフォルダ> <年度（西暦）> [出力先.js]
+  出力先を省くと data/calendar_shunan.js に書く。
 
 フォルダには次を置く（市のサイトからダウンロード）:
   A.pdf ～ H.pdf, otsushima.pdf, tokuyama_sankan.pdf, wada_sankan.pdf
-  page_143320.html（徳山）, page_143319.html（新南陽）, page_143318.html（熊毛）, page_143317.html（鹿野）
+  tokuyama.html（徳山）, shinnanyo.html（新南陽）, kumage.html（熊毛）, kano.html（鹿野）
+  （市のサイトの「令和○年度ごみ収集カレンダー（徳山）」などのページを保存したもの。
+    町名と日程の対応表が載っている。tools/download_sources.py で自動で保存できる）
 
 カレンダーのマス目は、色付きの図形（ベクター）で描かれているので、
 その色から「その日に何ごみが出せるか」を読み取る。
@@ -45,7 +48,7 @@ BLOCKS = [
     (38, 377, 414, 593), (428, 377, 803, 593),
     (38, 598, 414, 814), (428, 598, 803, 814),
 ]
-FISCAL_YEAR = 2026  # 令和8年度（2026年4月～2027年3月）
+FISCAL_YEAR = 2026  # 実行するときに年度で上書きする（2026 = 令和8年度）
 
 
 def color_name(fill):
@@ -153,7 +156,7 @@ MOUNTAIN_TEXT = {
 }
 
 
-# カレンダーの注記（※）で個別に書かれている日（画像を見て確認したもの）
+# カレンダーの注記（※）で個別に書かれている日（画像を見て確認したもの）。年度が変わったら新しいカレンダーの注記を見て足す
 MOUNTAIN_OVERRIDES = {
     "和田山間": {
         "2026-11-30": ["可燃", "容プラ", "処困"],  # ※30日(月)に「処理困難物」を収集
@@ -228,6 +231,8 @@ def read_mountain_pdf(key, path):
                     cats = ["可燃"]
         days[d.isoformat()] = cats
     for k, cats in MOUNTAIN_OVERRIDES.get(key, {}).items():
+        if not (f"{FISCAL_YEAR}-04-01" <= k <= f"{FISCAL_YEAR + 1}-03-31"):
+            continue   # ほかの年度の注記
         if not days.get(k):
             print("  !! 注記の日が収集日として読めていない", key, k)
         days[k] = cats
@@ -277,7 +282,7 @@ def is_regular(d, cat, rules):
 
 def read_areas(folder):
     """市のページの「行政区別日程一覧」表から 町名 → 日程 を作る。"""
-    pages = [("徳山", "page_143320.html"), ("新南陽", "page_143319.html"), ("熊毛", "page_143318.html")]
+    pages = [("徳山", "tokuyama.html"), ("新南陽", "shinnanyo.html"), ("熊毛", "kumage.html")]
     areas = []
     for region, fn in pages:
         raw = (folder / fn).read_bytes()
@@ -330,8 +335,10 @@ def add_readings(areas):
 
 
 def main():
+    global FISCAL_YEAR
     folder = Path(sys.argv[1])
-    out_html = Path(sys.argv[2])
+    FISCAL_YEAR = int(sys.argv[2])
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     sched_data = {}
     for key, fn in SCHEDULES.items():
         if key in MOUNTAIN_RULES:
@@ -356,13 +363,10 @@ def main():
         print("   特別:", {k: v for k, v in extra.items() if v})
     areas = read_areas(folder)
     print("areas", len(areas), Counter(a["s"] for a in areas))
-    payload = json.dumps({"year": FISCAL_YEAR, "schedules": sched_data, "areas": areas},
-                         ensure_ascii=False, separators=(",", ":"))
-    src = out_html.read_text(encoding="utf-8")
-    start, end = "/*CAL-DATA-START*/", "/*CAL-DATA-END*/"
-    i, j = src.index(start) + len(start), src.index(end)
-    out_html.write_text(src[:i] + payload + src[j:], encoding="utf-8")
-    print("wrote", out_html, len(payload), "bytes")
+    from datafile import write_calendar
+    out = write_calendar("shunan", {"year": FISCAL_YEAR, "schedules": sched_data, "areas": areas},
+                         "tools/extract_calendar.py", sys.argv[3] if len(sys.argv) > 3 else None)
+    print("wrote", out)
 
 
 if __name__ == "__main__":

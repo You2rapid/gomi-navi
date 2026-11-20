@@ -1,7 +1,8 @@
 """「今いる場所から探す」用の小さな地図データ（geo/towns.json）を作る。
 
 使い方:
-  python tools/build_geo.py <KMLのフォルダ> index.html geo/towns.json [確認用の一覧.txt]
+  python tools/build_geo.py <KMLのフォルダ> geo/towns.json [確認用の一覧.txt]
+  （ふだんは tools/update_year.py から呼ばれる。KML は 元データ/地図/ にある）
 
 KML のフォルダには、e-Stat「統計地理情報システム」の境界データ
 （国勢調査 令和2年 小地域（町丁・字等別）、世界測地系 緯度経度、KML 形式）を置く。
@@ -10,9 +11,9 @@ KML のフォルダには、e-Stat「統計地理情報システム」の境界�
 
 できるデータ:
   ・町丁ごとの境目（形を少し簡単にして、10万分の1度の整数・差分で保存）
-  ・周南市：町丁ごとに、アプリの地区（index.html の GOMI_CAL.areas）の候補
+  ・周南市：町丁ごとに、アプリの地区（data/calendar_shunan.js の areas）の候補
   ・下松市：西地区・東地区の境目の線（市のごみカレンダーのページにある地図「sinai.jpg」から読み取った、おおまかな線）
-  ・光市：町丁ごとに、アプリの地区（index.html の GOMI_CAL_HIKARI.areas）の候補（収集カレンダーに書いてある住所から）
+  ・光市：町丁ごとに、アプリの地区（data/calendar_hikari.js の areas）の候補（収集カレンダーに書いてある住所から）
 
 出典：政府統計の総合窓口（e-Stat）国勢調査（令和2年）町丁・字等別境界データ を加工して作成。
 """
@@ -188,9 +189,10 @@ def shunan_candidates(towns, areas):
     return res
 
 def main():
-    kml_dir, html_path, out_path = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-    html = html_path.read_text(encoding="utf-8")
-    cal = json.loads(re.search(r"window\.GOMI_CAL = /\*CAL-DATA-START\*/(.*?)/\*CAL-DATA-END\*/", html, re.S).group(1))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from datafile import read_calendar
+    kml_dir, out_path = Path(sys.argv[1]), Path(sys.argv[2])
+    cal = read_calendar("shunan")
     areas = cal["areas"]
     out = {"base": BASE, "source": "e-Stat 国勢調査（令和2年）町丁・字等別境界データを加工", "cities": {}}
 
@@ -225,7 +227,7 @@ def main():
     out["cities"]["kudamatsu"] = {"towns": kd, "line": KUDA_LINE}
 
     # 光市
-    hcal = json.loads(re.search(r"window\.GOMI_CAL_HIKARI = /\*HIKARI-DATA-START\*/(.*?)/\*HIKARI-DATA-END\*/", html, re.S).group(1))
+    hcal = read_calendar("hikari")
     towns = [t for t in parse_kml(kml_dir / "r2ka35210.kml") if t["name"]]
     hk = []
     for t in towns:
@@ -237,9 +239,9 @@ def main():
     out_path.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     # 確認用の一覧（周南市・光市の町 → アプリの地区の候補）
-    if len(sys.argv) < 5:
+    if len(sys.argv) < 4:
         print("towns", len(sh), len(kd), len(hk), "bytes", out_path.stat().st_size); return
-    with open(sys.argv[4], "w", encoding="utf-8") as f:
+    with open(sys.argv[3], "w", encoding="utf-8") as f:
         for t in sh:
             f.write(f"{t['n']}\t{t['r']}\t{' / '.join(areas[j]['n'] + '(' + areas[j]['s'] + ')' for j in t['c'])}\n")
         for t in hk:

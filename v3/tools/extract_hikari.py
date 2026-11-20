@@ -1,11 +1,12 @@
 """光市「令和8年度 ごみ収集カレンダー」（地区ごとのPDF）から収集日を取り出す。
 
-使い方:
-  python tools/extract_hikari.py <PDFのフォルダ> hikari.json
-  （できた JSON を index.html の window.GOMI_CAL_HIKARI に貼り付ける）
+使い方（ふだんは tools/update_year.py から呼ばれる）:
+  python tools/extract_hikari.py <PDFのフォルダ> <年度（西暦）> [出力先.js]
+  出力先を省くと data/calendar_hikari.js に書く。
 
-フォルダには市のサイト（ごみ収集カレンダーのページ）からダウンロードした
-081gomicalendermurozumi.pdf 〜 087gomicalenderyamato.pdf の7つを置く。
+フォルダには市のサイト（ごみ収集カレンダーのページ）からダウンロードした7つのPDFを
+murozumi.pdf・mitsui.pdf・shimata.pdf・asaekita.pdf・asaeminami.pdf・mishima.pdf・yamato.pdf の名前で置く
+（令和8年度のファイル名は 081gomicalendermurozumi.pdf 〜 087gomicalenderyamato.pdf）。
 PDF の文字は図形（アウトライン）なので、
   ・収集の札：色つき（または白）の四角形の色と、中の文字の形（図形の数）で種類を見分ける
   ・日付：マスの左上の数字の形（図形の数）を読み、曜日が列と合うものを選ぶ
@@ -96,7 +97,10 @@ def page_data(page, months):
     if used != len(labels): raise SystemExit(f'labels outside cells: {len(labels) - used}')
     return out
 
-MONTHS = [[(2026, 4), (2026, 5), (2026, 6), (2026, 7)], [(2026, 8), (2026, 9), (2026, 10), (2026, 11)], [(2026, 12), (2027, 1), (2027, 2), (2027, 3)]]
+def months_of(year):
+    # 1ページに4か月ずつ（4〜7月、8〜11月、12〜3月）
+    ms = [(year, m) for m in range(4, 13)] + [(year + 1, m) for m in range(1, 4)]
+    return [ms[0:4], ms[4:8], ms[8:12]]
 ORDER = ['可燃', '容プラ', '他プラ', 'ペット', 'びん缶', '金属', '小型家電', '古紙古布', '可燃粗大', '有害', '陶磁器']
 WD = '日月火水木金土'
 # 地区（ファイル名, 地区名, 読み, 住所）。大和地区だけ出す時刻が朝7時30分まで
@@ -136,8 +140,9 @@ def rules_and_moved(days):
     return rules, {k: sorted(v, key=ORDER.index) for k, v in sorted(moved.items())}
 
 if __name__ == '__main__':
-    files = {os.path.basename(f)[3:-4].replace('gomicalender', ''): f for f in glob.glob(os.path.join(sys.argv[1], '08*gomicalender*.pdf'))}
-    res = {'year': 2026, 'schedules': {}, 'areas': []}
+    year = int(sys.argv[2]); MONTHS = months_of(year)
+    files = {key: os.path.join(sys.argv[1], key + '.pdf') for key, *_ in AREAS}
+    res = {'year': year, 'schedules': {}, 'areas': []}
     for key, name, yomi, desc in AREAS:
         doc = pymupdf.open(files[key]); days = {}
         for i in range(3): days.update(page_data(doc[i], MONTHS[i]))
@@ -146,6 +151,7 @@ if __name__ == '__main__':
         res['schedules'][name] = {'rules': rules, 'days': {d.isoformat(): sorted(ks, key=ORDER.index) for d, ks in sorted(days.items())},
                                   'moved': moved, **({'cut': CUT[key]} if key in CUT else {})}
         res['areas'].append({'r': '', 'n': name, 's': name, 'y': yomi, 'd': desc})
-        print(name, len(days), rules, len(moved), file=sys.stderr)
-    with open(sys.argv[2], 'w', encoding='utf-8') as f:
-        f.write(json.dumps(res, ensure_ascii=False, separators=(',', ':')))
+        print(name, len(days), '日', rules, '振替', len(moved))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from datafile import write_calendar
+    print('wrote', write_calendar('hikari', res, 'tools/extract_hikari.py', sys.argv[3] if len(sys.argv) > 3 else None))

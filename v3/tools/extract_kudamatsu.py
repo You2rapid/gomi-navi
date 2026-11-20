@@ -1,10 +1,11 @@
 """下松市「家庭ごみ収集カレンダー（A4・月ごと）」PDF から収集日データを作る。
 
-使い方:
-  python tools/extract_kudamatsu.py <PDFのフォルダ> > kudamatsu.json
-  （できた JSON を index.html の window.GOMI_CAL_KUDAMATSU に貼り付ける）
+使い方（ふだんは tools/update_year.py から呼ばれる）:
+  python tools/extract_kudamatsu.py <PDFのフォルダ> <年度（西暦）> [出力先.js]
+  出力先を省くと data/calendar_kudamatsu.js に書く。
 
-フォルダには市のサイトからダウンロードした r8nishia4.pdf（西地区）・r8higashia4.pdf（東地区）を置く。
+フォルダには市のサイトからダウンロードした「A4・月ごと」のカレンダーを
+nishi.pdf（西地区。令和8年度は r8nishia4.pdf）・higashi.pdf（東地区。r8higashia4.pdf）の名前で置く。
 PDF の文字は図形（アウトライン）になっているので、文字の図形の「色」と「点の数」から
 ごみの種類を見分ける。見分けられない図形があれば標準エラーに出す。
 """
@@ -13,8 +14,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 import pymupdf
 
-FILES = {"西地区": "r8nishia4.pdf", "東地区": "r8higashia4.pdf"}
-YEAR = 2026
+FILES = {"西地区": "nishi.pdf", "東地区": "higashi.pdf"}
+YEAR = 2026   # 実行するときに年度で上書きする
 COLS = [51, 107, 233, 360, 487, 612, 740, 794]   # 日〜土 の列の境目
 ROW_TOP, ROW_H = 162, 71.3                         # 1週目の上端と週の高さ
 BLACK, RED, BLUE, WHITE = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 1.0, 1.0)
@@ -115,6 +116,8 @@ def rules(days):
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     folder = Path(sys.argv[1])
+    YEAR = int(sys.argv[2])
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     res = {"year": YEAR, "schedules": {}, "areas": [
         {"r": "", "n": "西地区", "s": "西地区", "y": "にしちく",
          "d": "花岡地区・米川地区の全域、久保地区の岩徳線より北、末武地区の平田川より西"},
@@ -128,4 +131,8 @@ if __name__ == "__main__":
             "days": {k: sorted(v, key=ORDER.index) for k, v in sorted(days.items())},
             "moved": {},
         }
-    print(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
+    from datafile import write_calendar
+    out = write_calendar("kudamatsu", res, "tools/extract_kudamatsu.py", sys.argv[3] if len(sys.argv) > 3 else None)
+    for name, sc in res["schedules"].items():
+        print(name, len(sc["days"]), "日", sc["rules"])
+    print("wrote", out)
