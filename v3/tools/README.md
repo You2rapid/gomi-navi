@@ -25,6 +25,7 @@ v3/
     download_sources.py         毎年4月：市のサイトから新しいカレンダーをダウンロード
     build_geo.py                地図（geo/）を作る
     status.py                   状況一覧（元データ/状況一覧.html）を作る
+    make_icons.py               アプリのアイコン（v3/icons/）を作る（絵を変えたいときは中の数字や色を直して実行）
     lib/                        道具みんなで使う部品（自治体の一覧の読み書き・ダウンロード・地図）
     munis/35_yamaguchi/35215_shunan/   自治体ごとの道具
       README.md                 その自治体の注意・ダウンロード元

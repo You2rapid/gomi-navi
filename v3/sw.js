@@ -5,7 +5,7 @@
 // 自治体ごとのデータ（data/<県>/<自治体>/）と地図（geo/）は、一度開いたものが下のしくみで保存される。
 // 同じサイトにある旧版（gomi-v1・gomi2-）のキャッシュを消さないよう、名前は "gomi3-" で始める。
 const PREFIX = "gomi3-";
-const VERSION = PREFIX + "v3";
+const VERSION = PREFIX + "v4";
 const FILES = [
   "./",
   "./index.html",
