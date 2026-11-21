@@ -8,7 +8,8 @@
 表に出すもの:
   収集日（何年度か・地区の数・祝日のデータと年度が合っているか）、品目（件数・区分の書きまちがい）、
   設定（区分・色）、今いる場所から探す（町の数・地区が決まらない町の数）、
-  元データ（今の年度と次の年度のファイルがそろっているか・分別の冊子・地図）、道具（calendar.py・geo.py・README）
+  元データ（今の年度と次の年度のファイルがそろっているか・分別の冊子・地図）、道具（calendar.py・geo.py・README）、
+  商用利用（license.json：使っている資料の利用条件・許可が必要か・確かめた日）
 """
 import datetime as dt
 import html
@@ -31,9 +32,10 @@ def reiwa(y):
     return f"令和{y - 2018}年度"
 
 
-def check_muni(m, now_fy, holidays_year, geo_cities, web=None):
+def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     """1つの自治体を調べて、(列ごとの [状態, 表示, くわしく]) と、気をつけることの一覧を返す"""
     notes, row = [], {}
+    today = today or dt.date.today()
 
     def note(level, text):
         notes.append((level, text))
@@ -148,6 +150,32 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None):
     if not can_dl:
         note(WARN, "calendar.py に download がありません（毎年、手でダウンロード）")
 
+    # ---- 商用利用（license.json）----
+    lic_file = m.tool_dir / "license.json"
+    if lic_file.exists():
+        try:
+            lic = json.loads(lic_file.read_text(encoding="utf-8"))
+            judge = lic.get("商用利用", "要確認")
+            checked = lic.get("確認した日", "")
+            asked = lic.get("許可の記録", [])
+            need = [d["データ"] for d in lic.get("データごと", []) if d.get("商用利用") in ("要許可", "要確認")]
+            lv = OK if judge in ("可", "出典表示で可") else BAD if judge == "要許可" and not asked else WARN
+            detail = (f"{'・'.join(need)}が{judge}" if need else "すべて使える") + (f"（確認 {checked}）" if checked else "")
+            row["lic"] = (lv, judge, detail)
+            if need:
+                note(WARN, f"商用利用：{'・'.join(need)}は{judge}。license.json の「やること」と「許可の問い合わせ先」を見る")
+            try:
+                if checked and (today - dt.date.fromisoformat(checked)).days > 365:
+                    note(WARN, f"商用利用：利用条件を確かめてから1年以上たっています（{checked}）。市のサイトで確かめ直す")
+            except ValueError:
+                note(WARN, f"license.json の「確認した日」が日付になっていません（{checked}）")
+        except Exception as e:
+            row["lic"] = (BAD, "読めません", str(e))
+            note(BAD, f"license.json が読めません：{e}")
+    else:
+        row["lic"] = (WARN, "未調査", "license.json なし")
+        note(WARN, "商用利用：license.json がありません（使っている資料の利用条件を調べて書く）")
+
     # ---- 次の年度（アプリに入っている年度の次）のカレンダーが市のサイトに出ているか ----
     if web and can_dl:
         import web as W
@@ -200,7 +228,7 @@ ul.notes li{padding:8px 12px;border-bottom:1px solid var(--line)} ul.notes li:la
 .howto{color:var(--muted);font-size:13px} code{font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px}
 """
 
-COLS = [("cal", "収集日"), ("items", "品目"), ("city", "設定"), ("geo", "今いる場所"), ("src", "元データ"), ("tools", "道具"), ("next", "次のカレンダー（市のサイト）")]
+COLS = [("cal", "収集日"), ("items", "品目"), ("city", "設定"), ("geo", "今いる場所"), ("src", "元データ"), ("tools", "道具"), ("lic", "商用利用"), ("next", "次のカレンダー（市のサイト）")]
 
 
 def main():
@@ -218,7 +246,7 @@ def main():
     rows, all_notes = [], []
     for m in M.munis():
         print("調べています:", m)
-        row, notes = check_muni(m, now_fy, hol["year"], geo_cities, web)
+        row, notes = check_muni(m, now_fy, hol["year"], geo_cities, web, today)
         rows.append((m, row, notes))
         all_notes += [(lv, m, t) for lv, t in notes]
     cols = [c for c in COLS if web or c[0] != "next"]
@@ -255,7 +283,8 @@ def main():
     body.append(f"""<h2>見かた</h2>
 <p class="howto">緑＝問題なし、黄＝気をつけること、赤＝直すこと。
 収集日は毎年4月に <code>download_sources.py</code> → <code>update_year.py</code> で更新します（くわしくは <code>gomiappV3.1/tools/README.md</code>）。
-自治体ごとの注意は <code>gomiappV3.1/tools/munis/&lt;県&gt;/&lt;自治体&gt;/README.md</code> にあります。</p>
+自治体ごとの注意は <code>gomiappV3.1/tools/munis/&lt;県&gt;/&lt;自治体&gt;/README.md</code> にあります。<br>
+商用利用は <code>license.json</code> から出しています（可・出典表示で可＝緑、要確認・許可を問い合わせ中＝黄、要許可＝赤）。市のサイトの利用条件のまとめで、法律の判断ではありません。</p>
 </main>""")
     page = f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>状況一覧</title><style>{CSS}</style></head><body>{"".join(body)}</body></html>'
     out = M.SOURCES / "状況一覧.html"
