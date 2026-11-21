@@ -1,23 +1,33 @@
-"""山口県 下松市（35207）：「家庭ごみ収集カレンダー（A4・月ごと）」PDF から収集日データを作る。
+"""山口県 下松市（35207）：オープンデータ「【下松市】ゴミ収集カレンダー」（CSV）から収集日データを作り、
+市のサイトの「家庭ごみ収集カレンダー（A4・月ごと）」PDF と見くらべて確かめる。
 
 このファイルのきまり（どの自治体も同じ形。tools/update_year.py・download_sources.py から使う）:
   NEED                       … 元データ/<県>/<自治体>/<年度>年度/ に置くファイルの名前
   download(year, dest, web, plan) … 市のサイトから NEED のファイルを探して plan に入れる（web は tools/lib/web.py）
   make_calendar(src, year)   … src（上のフォルダ）のファイルから収集日データ（dict）を作る。読めなければ例外で止める
 
-フォルダには市のサイトからダウンロードした「A4・月ごと」のカレンダーを
+フォルダには、山口県オープンデータカタログサイトの「【下松市】ゴミ収集カレンダー（○○○○年度）」の CSV を opendata.csv、
+市のサイトからダウンロードした「A4・月ごと」のカレンダーを
 nishi.pdf（西地区。令和8年度は r8nishia4.pdf）・higashi.pdf（東地区。r8higashia4.pdf）の名前で置く。
+収集日は CSV（CC BY 4.0）から作る。CSV と PDF で違う日があれば一覧に出し、その日は PDF（市が配っているカレンダー）に合わせる
+（令和8年度は、CSV に東地区の 8/31 の燃やす袋ごみが抜けていた）。
 PDF の文字は図形（アウトライン）になっているので、文字の図形の「色」と「点の数」から
 ごみの種類を見分ける。見分けられない図形があれば標準エラーに出す。
 """
-import calendar, datetime as dt, json, re, sys
+import calendar, csv, datetime as dt, io, json, re, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 import pymupdf
 
 FILES = {"西地区": "nishi.pdf", "東地区": "higashi.pdf"}
-NEED = list(FILES.values())
+CSV = "opendata.csv"
+NEED = [CSV] + list(FILES.values())
 PAGE = "https://www.city.kudamatsu.lg.jp/kankyou/seikatsu/kankyou/kannrikakari/gomikarenda.html"
+DATASET = "https://yamaguchi-opendata.jp/ckan/dataset/352071_garbage_collection_cal"
+# オープンデータの収集区分 → アプリの区分（「収集なし」は使わない）
+CSV_CATS = {"燃やす袋ごみ": "燃やす", "可燃系資源": "可燃資源", "プラスチック製容器包装": "容プラ", "その他プラスチック類": "他プラ",
+            "ペットボトル": "ペット", "びん・かん類": "びん缶", "金属類": "金属", "小型家電品": "小型家電", "埋立ごみ": "埋立",
+            "大型不燃ごみ": "大型不燃", "大型可燃ごみ": "大型可燃", "有害ごみ": "有害"}
 YEAR = 2026   # 実行するときに年度で上書きする
 COLS = [51, 107, 233, 360, 487, 612, 740, 794]   # 日〜土 の列の境目
 ROW_TOP, ROW_H = 162, 71.3                         # 1週目の上端と週の高さ
@@ -117,7 +127,14 @@ def rules(days):
     return out
 
 def download(year, dest, web, plan):
-    # 「A4・月ごと」の版：r○nishia4.pdf / r○higashia4.pdf（○は令和の年）
+    # オープンデータの CSV（「【下松市】ゴミ収集カレンダー（2026年度）」のように、名前に年度が入っている）
+    import opendata
+    res = [r for r in opendata.info(DATASET, web)["resources"] if r["format"] == "CSV" and f"{year}年度" in r["name"]]
+    if res:
+        plan.add(res[0]["url"], dest / CSV)
+    else:
+        plan.problem(f"オープンデータに {year}年度 の CSV がまだありません（{DATASET}）")
+    # 見くらべる用の「A4・月ごと」の版：r○nishia4.pdf / r○higashia4.pdf（○は令和の年）
     reiwa = year - 2018
     page = web.text(web.get(PAGE))
     for key, fn in (("nishi", "nishi.pdf"), ("higashi", "higashi.pdf")):
@@ -127,6 +144,39 @@ def download(year, dest, web, plan):
         else:
             others = sorted({u.rsplit("/", 1)[-1] for u, _ in web.links(page, PAGE) if key in u and u.endswith(".pdf")})
             plan.problem(f"r{reiwa}{key}a4.pdf が {PAGE} に見つかりません（あったもの：{', '.join(others) or 'なし'}）")
+
+
+def csv_days(path, year):
+    """オープンデータの CSV → {地区: {日付: [区分]}}（その年度の4月〜3月の分だけ）"""
+    raw = Path(path).read_bytes()
+    text = next((raw.decode(e) for e in ("utf-8-sig", "cp932") if _decodes(raw, e)), None)
+    out, unknown = {name: defaultdict(list) for name in FILES}, set()
+    for r in csv.DictReader(io.StringIO(text)):
+        k = r["ゴミ収集カレンダー_西暦年月日"]
+        k = f"{k[:4]}-{k[4:6]}-{k[6:8]}"
+        if not (f"{year}-04-01" <= k <= f"{year + 1}-03-31"):
+            continue
+        name = r["ゴミ収集カレンダー_収集区分"].strip()
+        if name == "収集なし":
+            continue
+        c = CSV_CATS.get(name)
+        if not c:
+            unknown.add(name)
+            continue
+        out[r["ゴミ収集カレンダー_収集地区"].strip()][k].append(c)
+    if unknown:
+        raise SystemExit(f"CSV に知らない収集区分があります（CSV_CATS に足す）：{'、'.join(sorted(unknown))}")
+    if not all(out.values()):
+        raise SystemExit(f"CSV に {year}年度 の収集日がありません（年度のちがう CSV かもしれません）")
+    return out
+
+
+def _decodes(raw, enc):
+    try:
+        raw.decode(enc)
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def make_calendar(folder, year):
@@ -139,11 +189,21 @@ def make_calendar(folder, year):
         {"r": "", "n": "東地区", "s": "東地区", "y": "ひがしちく",
          "d": "下松地区・笠戸島の全域、久保地区の岩徳線より南、末武地区の平田川より東"},
     ]}
+    from_csv = csv_days(folder / CSV, year)
     for name, f in FILES.items():
-        days = extract(folder / f)
+        days = {k: sorted(set(v), key=ORDER.index) for k, v in from_csv[name].items()}
+        # 市の PDF と見くらべる。違う日は PDF に合わせる
+        pdf = {k: sorted(v, key=ORDER.index) for k, v in extract(folder / f).items()}
+        for k in sorted(set(days) | set(pdf)):
+            if days.get(k, []) != pdf.get(k, []):
+                print(f"  ！ {name} {k}：オープンデータ {'・'.join(days.get(k, [])) or 'なし'} ／ 市のPDF {'・'.join(pdf.get(k, [])) or 'なし'} → PDF に合わせる（オープンデータの入力もれかもしれません）")
+                if pdf.get(k):
+                    days[k] = pdf[k]
+                else:
+                    days.pop(k, None)
         res["schedules"][name] = {
             "rules": rules(days),
-            "days": {k: sorted(v, key=ORDER.index) for k, v in sorted(days.items())},
+            "days": dict(sorted(days.items())),
             "moved": {},
         }
     for name, sc in res["schedules"].items():

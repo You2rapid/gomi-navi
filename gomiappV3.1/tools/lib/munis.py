@@ -63,7 +63,7 @@ class Muni:
     def write_calendar(self, data, path=None):
         path = Path(path) if path else self.data_dir / "calendar.js"
         text = (f"// {self.pref_name} {self.name}（{self.code}） {nendo(data['year'])}の収集日\n"
-                f"// 市のPDFから自動で作ったファイルです。手で直さず、tools/update_year.py で作り直してください"
+                f"// 市のPDF・オープンデータから自動で作ったファイルです。手で直さず、tools/update_year.py で作り直してください"
                 f"（tools/munis/{self.path}/calendar.py を使います）。\n"
                 f'gomiData("{self.code}", "calendar", /*CAL-START*/' + json.dumps(data, ensure_ascii=False, separators=(",", ":"))
                 + "/*CAL-END*/);\n")

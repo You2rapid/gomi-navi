@@ -1,7 +1,10 @@
 """市のサイトからページやファイルを取ってくる（download_sources.py と各自治体の calendar.py の download で使う）"""
 import html
 import re
+import shutil
+import subprocess
 import time
+import urllib.error
 import urllib.request
 from urllib.parse import urljoin
 
@@ -10,8 +13,14 @@ UA = {"User-Agent": "Mozilla/5.0 (gomi-calendar updater)"}
 
 def get(url):
     time.sleep(0.5)   # 市のサーバーに負担をかけないよう、少し間をあける
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
-        return r.read()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
+            return r.read()
+    except urllib.error.URLError as e:
+        # Python と暗号のやり方が合わないサーバー（山口県オープンデータカタログなど）は、パソコンの curl で取る
+        if "SSL" not in str(e.reason) or not shutil.which("curl"):
+            raise
+        return subprocess.run(["curl", "-sSfL", "--max-time", "60", "-A", UA["User-Agent"], url], capture_output=True, check=True).stdout
 
 
 def text(raw):

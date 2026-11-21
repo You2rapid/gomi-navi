@@ -1,4 +1,7 @@
-"""山口県 下松市（35207）：西地区・東地区の境目の線（市のごみカレンダーのページの地図「sinai.jpg」から読み取った、おおまかな線）。
+"""山口県 下松市（35207）：e-Stat の町丁 → 西地区・東地区。
+オープンデータ「【下松市】ゴミ収集地区一覧」（CC BY 4.0。元データ/35_山口県/35207_下松市/オープンデータ/garbage_collection_area.csv）
+の町名と地区から決める。「岩徳線以北／以南」で分かれる大字（切山・来巻・山田）は、2つの地区の候補を出す。
+一覧は python gomiappV3.1/tools/update_opendata.py 35207 で新しくする。
 
 このファイルのきまり（tools/build_geo.py から使う）:
   town_info(towns, cal) … e-Stat の町丁（towns：名前 name・代表点 x, y・形 rings）ごとに、アプリの地区との対応を返す
@@ -6,26 +9,72 @@
   extra(cal)            … 自治体ぜんたいの追加データ（境目の線など。なければ {}）
 地図（KML）は 元データ/<県>/<自治体>/地図/r2ka<自治体コード>.kml
 """
+import re
+import sys
+import unicodedata
+from pathlib import Path
 
-# 下松市の西地区／東地区の境目（南西の海側 → 北東の市境の外）。経度, 緯度
-KUDA_LINE = [[131.8400, 33.9950], [131.85026, 34.0076], [131.85242, 34.01112], [131.85458, 34.0158], [131.85674, 34.01903],
-    [131.85891, 34.02195], [131.86107, 34.0243], [131.86323, 34.02635], [131.8654, 34.02811], [131.86756, 34.02986],
-    [131.86972, 34.03133], [131.87189, 34.03308], [131.87405, 34.03396], [131.87621, 34.03514], [131.87837, 34.03601],
-    [131.88054, 34.03689], [131.8827, 34.03806], [131.88486, 34.03894], [131.88703, 34.03953], [131.88919, 34.04011],
-    [131.89135, 34.0407], [131.89351, 34.04129], [131.89568, 34.04158], [131.89784, 34.04217], [131.9, 34.04275],
-    [131.90433, 34.04334], [131.90866, 34.04392], [131.91298, 34.04422], [131.91731, 34.04451], [131.93028, 34.0448], [131.9700, 34.0448]]
-# 地図の説明で、線とは別に地区が決まっている町（凡例「東陽地区」は西地区、「笠戸島地区」は東地区）
-KUDA_SIDE = {"東陽": "西地区", "笠戸島": "東地区"}
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+import munis as M  # noqa: E402
+
+AREA_CSV = M.munis(["35207"])[0].src_dir / "オープンデータ" / "garbage_collection_area.csv"
+# 一覧と e-Stat で書き方がちがう町名（一覧 → e-Stat）
+ALIAS = {"籐光町": "藤光町"}
+KANJI = "〇一二三四五六七八九"
+
+
+def kanji_num(s):
+    """一 → 1、十二 → 12"""
+    if "十" in s:
+        a, _, b = s.partition("十")
+        return (KANJI.index(a) if a else 1) * 10 + (KANJI.index(b) if b else 0)
+    return int("".join(str(KANJI.index(ch)) for ch in s))
+
+
+def area_table():
+    """一覧 → [(町名, 丁目の集合 or None, 地区)]"""
+    import csv, io
+    raw = AREA_CSV.read_bytes()
+    text = next(raw.decode(e) for e in ("utf-8-sig", "cp932") if _ok(raw, e))
+    out = []
+    for r in csv.DictReader(io.StringIO(text)):
+        name = unicodedata.normalize("NFKC", r["ゴミの収集地区_地区名"]).replace("(大字)", "大字")
+        name = re.sub(r"\s*岩徳線以[北南]$", "", name).strip()
+        district = r["ゴミの収集地区_収集地区"].strip()
+        m = re.match(r"^(.*?)(\d+)(?:丁目)?(?:([・~～])(\d+))?丁目$", name)
+        if m:
+            base, a = m.group(1), int(m.group(2))
+            b = int(m.group(4)) if m.group(4) else a
+            chome = set(range(a, b + 1)) if m.group(3) in ("~", "～") else {a, b}
+        else:
+            base, chome = name, None
+        out.append((ALIAS.get(base, base), chome, district))
+    return out
+
+
+def _ok(raw, enc):
+    try:
+        raw.decode(enc)
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def town_info(towns, cal):
-    out = []
+    idx = {a["n"]: i for i, a in enumerate(cal["areas"])}
+    table = area_table()
+    out, missing = [], []
     for t in towns:
-        side = next((v for k, v in KUDA_SIDE.items() if k in t["name"]), None)
-        out.append({"side": side} if side else {})
+        m = re.match(rf"^(.*?)([{KANJI}十]+)丁目$", t["name"])
+        base, n = (m.group(1), kanji_num(m.group(2))) if m else (t["name"], None)
+        found = sorted({d for b, ch, d in table if b == base and (ch is None or n in ch)}, key=lambda d: idx[d])
+        if not found:
+            missing.append(t["name"])
+        out.append({"c": [idx[d] for d in found]})
+    if missing:
+        print("  ！ 下松市：収集地区一覧に見つからない町：" + "、".join(sorted(set(missing))))
     return out
 
 
 def extra(cal):
-    # 線の向き（南西→北東）の左側（北西）が西地区
-    return {"line": KUDA_LINE, "sides": ["西地区", "東地区"]}
+    return {}

@@ -999,7 +999,7 @@ function locate(lon, lat){
   }
   return best && best.d <= 300 ? {city:best.city, town:best.town, near:true} : null;
 }
-// 境目の線で地区を分ける自治体（下松市）：線の向きの左側が sides[0]、右側が sides[1]
+// 境目の線で地区を分ける自治体（今は使っていない。前は下松市）：線の向きの左側が sides[0]、右側が sides[1]
 function lineSide(lon, lat, town, gc){
   if (town.side) return {side:town.side, d:Infinity};
   const L = gc.line, p = toM(lon, lat, lat);

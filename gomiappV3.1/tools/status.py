@@ -9,7 +9,7 @@
   収集日（何年度か・地区の数・祝日のデータと年度が合っているか）、品目（件数・区分の書きまちがい）、
   設定（区分・色）、今いる場所から探す（町の数・地区が決まらない町の数）、
   元データ（今の年度と次の年度のファイルがそろっているか・分別の冊子・地図）、道具（calendar.py・geo.py・README）、
-  商用利用（license.json：使っている資料の利用条件・許可が必要か・確かめた日）
+  商用利用（license.json：使っている資料の利用条件・許可が必要か・確かめた日）と、オープンデータを使っているか・古くなっていないか
 """
 import datetime as dt
 import html
@@ -150,7 +150,9 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     if not can_dl:
         note(WARN, "calendar.py に download がありません（毎年、手でダウンロード）")
 
-    # ---- 商用利用（license.json）----
+    # ---- 商用利用（license.json）と、使っているオープンデータ ----
+    od_used = list(dict.fromkeys(_opendata_used(m, web, note, today)))
+    od_text = "オープンデータ：" + ("・".join(od_used) if od_used else "なし")
     lic_file = m.tool_dir / "license.json"
     if lic_file.exists():
         try:
@@ -160,7 +162,7 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
             asked = lic.get("許可の記録", [])
             need = [d["データ"] for d in lic.get("データごと", []) if d.get("商用利用") in ("要許可", "要確認")]
             lv = OK if judge in ("可", "出典表示で可") else BAD if judge == "要許可" and not asked else WARN
-            detail = (f"{'・'.join(need)}が{judge}" if need else "すべて使える") + (f"（確認 {checked}）" if checked else "")
+            detail = od_text + "／" + (f"{'・'.join(need)}が{judge}" if need else "すべて使える") + (f"（確認 {checked}）" if checked else "")
             row["lic"] = (lv, judge, detail)
             if need:
                 note(WARN, f"商用利用：{'・'.join(need)}は{judge}。license.json の「やること」と「許可の問い合わせ先」を見る")
@@ -173,7 +175,7 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
             row["lic"] = (BAD, "読めません", str(e))
             note(BAD, f"license.json が読めません：{e}")
     else:
-        row["lic"] = (WARN, "未調査", "license.json なし")
+        row["lic"] = (WARN, "未調査", od_text + "／license.json なし")
         note(WARN, "商用利用：license.json がありません（使っている資料の利用条件を調べて書く）")
 
     # ---- 次の年度（アプリに入っている年度の次）のカレンダーが市のサイトに出ているか ----
@@ -195,6 +197,44 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     elif web:
         row["next"] = (WARN, "調べられません", "自動ダウンロードなし")
     return row, notes
+
+
+OD_OLD_DAYS = 730   # オープンデータがこれより長く更新されていなければ「古くなっていないか」と出す（opendata.py の DATASETS の old_days で変えられる）
+
+
+def _opendata_used(m, web, note, today):
+    """この自治体が使っているオープンデータ（用途の名前）。古さも調べて note に出す"""
+    import opendata as OD
+    used = []
+    sets = []
+    mod = m.module("opendata")
+    if mod:
+        sets += [(ds["use"], ds["url"], m.src_dir / "オープンデータ" / ds["file"], ds) for ds in mod.DATASETS]
+    cal_mod = m.module("calendar")
+    if cal_mod and getattr(cal_mod, "DATASET", None):
+        sets.append(("収集日", cal_mod.DATASET, None, {}))   # 収集日は毎年の更新（status の「次のカレンダー」）で見る
+    for use, url, path, ds in sets:
+        used.append(use.split("（")[0])
+        local = OD.meta(path) if path else None
+        modified = local["modified"] if local else ""
+        if web:
+            try:
+                import web as W
+                res = next((r for r in OD.info(url, W)["resources"] if ds.get("pick", lambda r: False)(r)), None)
+                cat = res["modified"] if res else ""
+                if path and cat and cat != modified:
+                    note(WARN, f"オープンデータ「{use}」がカタログで新しくなっています（{cat}）。python gomiappV3.1/tools/update_opendata.py {m.code}")
+                modified = modified or cat
+            except Exception as e:
+                note(WARN, f"オープンデータ「{use}」のカタログを調べられませんでした（{e}）")
+        if path and not path.exists():
+            note(WARN, f"オープンデータ「{use}」のファイルが元データにありません。python gomiappV3.1/tools/update_opendata.py {m.code}")
+        try:
+            if modified and (today - dt.date.fromisoformat(modified)).days > ds.get("old_days", OD_OLD_DAYS):
+                note(WARN, f"オープンデータ「{use}」は {modified} から更新されていません。市の新しい資料と見くらべて、古くなっていないか確かめる")
+        except ValueError:
+            pass
+    return used
 
 
 CSS = """
@@ -284,7 +324,7 @@ def main():
 <p class="howto">緑＝問題なし、黄＝気をつけること、赤＝直すこと。
 収集日は毎年4月に <code>download_sources.py</code> → <code>update_year.py</code> で更新します（くわしくは <code>gomiappV3.1/tools/README.md</code>）。
 自治体ごとの注意は <code>gomiappV3.1/tools/munis/&lt;県&gt;/&lt;自治体&gt;/README.md</code> にあります。<br>
-商用利用は <code>license.json</code> から出しています（可・出典表示で可＝緑、要確認・許可を問い合わせ中＝黄、要許可＝赤）。市のサイトの利用条件のまとめで、法律の判断ではありません。</p>
+商用利用は <code>license.json</code> から出しています（可・出典表示で可＝緑、要確認・許可を問い合わせ中＝黄、要許可＝赤）。「オープンデータ：」は、そのデータをオープンデータから作っているもの（<code>opendata.py</code>・<code>calendar.py</code> から）。市のサイトの利用条件のまとめで、法律の判断ではありません。</p>
 </main>""")
     page = f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>状況一覧</title><style>{CSS}</style></head><body>{"".join(body)}</body></html>'
     out = M.SOURCES / "状況一覧.html"

@@ -6,20 +6,30 @@
 
 ## 収集日（毎年）
 
-ダウンロード元：https://www.city.kudamatsu.lg.jp/kankyou/seikatsu/kankyou/kannrikakari/gomikarenda.html の「A4・月ごと」の版
+オープンデータ「【下松市】ゴミ収集カレンダー」（CC BY 4.0。https://yamaguchi-opendata.jp/ckan/dataset/352071_garbage_collection_cal ）の
+その年度の CSV（「【下松市】ゴミ収集カレンダー（2026年度）」）を `opendata.csv` の名前で置く。2025年度・2026年度とも、2月に出ている。
+見くらべる用に、市のサイト https://www.city.kudamatsu.lg.jp/kankyou/seikatsu/kankyou/kannrikakari/gomikarenda.html の「A4・月ごと」の版
 （令和8年度は `r8nishia4.pdf`・`r8higashia4.pdf`）を、`nishi.pdf`（西地区）・`higashi.pdf`（東地区）の名前で置く。
+3つとも `download_sources.py` が取ってくる。
 
 注意：
+- CSV と PDF で違う日は、PDF に合わせて「！」で一覧に出す（令和8年度は、CSV に東地区 8/31 の燃やす袋ごみが抜けていた）。
 - 地区の説明（どこが西地区・東地区か）は `calendar.py` の `make_calendar` の中に書いてある。分け方が変わったら直す。
-- マスの位置（`COLS`・`ROW_TOP`・`ROW_H`）と、区分を見分ける図形の形（`SIG`）はPDFに合わせてある。変わると読み取れない区分が「?」で出る。
+- PDF のマスの位置（`COLS`・`ROW_TOP`・`ROW_H`）と、区分を見分ける図形の形（`SIG`）はPDFに合わせてある。変わると読み取れない区分が「?」で出る。
+- CSV の収集区分の名前が変わったら、`calendar.py` の `CSV_CATS` に足す。
 
-## 品目
+## 品目（オープンデータ）
 
-「家庭ごみ分別事典（令和5年5月）」（`分別の冊子/`）に例として載っている品目を、手で `items.js` に入れている（155件）。
+オープンデータ「【下松市】ゴミの分別方法一覧」（CC BY 4.0）の CSV から `opendata.py` で作る（1474件）。
+`python gomiappV3.1/tools/update_opendata.py 35207`。分別区分の名前が変わったら `opendata.py` の `CATS` に足す。
+（前は「家庭ごみ分別事典（令和5年5月）」から手で155件を入れていた。）
 
 ## 今いる場所から探す
 
-`geo.py`：市のサイトの地図（`地図/西地区東地区の地図.jpg`）から読み取った、西地区・東地区の境目の線 `KUDA_LINE`。
+`geo.py`：オープンデータ「【下松市】ゴミ収集地区一覧」の町名 → 西地区・東地区。
+岩徳線で分かれる大字（切山・来巻・山田）は、2つの地区の候補を出す。一覧と e-Stat で書き方がちがう町名は `ALIAS`。
+一覧を新しくしたら `python gomiappV3.1/tools/build_geo.py 35`。
+（前は、市のサイトの地図から読み取った境目の線を使っていた。）
 
 ## 商用利用
 
