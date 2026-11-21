@@ -1314,7 +1314,9 @@ async function scheduleNative(){
         if (m == null) continue;
         const at = new Date(e.d.getFullYear(), e.d.getMonth(), e.d.getDate(), 0, m);
         if (at > t0) list.push({title: `${m < 0 ? "あした" : "きょう"}は ${names} の日`,
-          body: `${m < 0 ? "あすの" : ""}${cut}までに出してください（${a.n}）`, schedule: {at, allowWhileIdle: true}});
+          body: `${m < 0 ? "あすの" : ""}${cut}までに出してください（${a.n}）`, schedule: {at, allowWhileIdle: true},
+          // Android：ぴったりの時刻の「アラーム」の許可（ストアの審査で使い道を聞かれる）は使わない。数分ずれることがある
+          isExactNotification: false});
       }
     }
     list.sort((x, y) => x.schedule.at - y.schedule.at);
