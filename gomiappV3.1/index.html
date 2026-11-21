@@ -306,35 +306,29 @@ footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
 .notify-open small{display:block;color:var(--muted);font-size:12.5px;line-height:1.45}
 .notify-open .go{margin-left:auto;flex:none;color:var(--muted);font-size:22px}
 .nf p{margin:4px 0 8px;font-size:14px}
-.nf .opts{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}
-.nf label.opt{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:5px 12px 5px 8px;font-size:14px;cursor:pointer}
-.nf label.opt i{width:10px;height:10px;border-radius:50%;background:var(--cc)}
-.nf label.opt:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
-.nf .times{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 6px}
-.nf .times label{font-size:12.5px;color:var(--muted)}
-.nf select{display:block;width:100%;margin-top:2px;font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--text)}
-.nf .count{font-size:13px;color:var(--muted);margin:8px 0 0}
-.nf .btn:disabled{opacity:.45;cursor:default}
-.nf .btn.sub{background:var(--surface-2);color:var(--text);margin-top:8px}
-.nf .done{margin:10px 0 0;font-size:13.5px}
-.nf details{margin:10px 0 0;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px}
-.nf details summary{cursor:pointer;font-weight:700;color:var(--accent)}
-.nf details ol{margin:6px 0 2px;padding-left:1.3em}
-.nf details li{margin:3px 0}
+.nf .nf-time{font-size:20px;font-weight:800;margin:4px 0 2px;color:var(--accent)}
+.nf .nf-range{width:100%;margin:6px 0 0;accent-color:var(--accent);height:28px}
+.nf .nf-scale{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin:0 0 4px}
 .nf .row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:15px;cursor:pointer}
 .nf .row input{flex:none;width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent)}
 .nf .row small{display:block;font-size:12.5px;color:var(--muted);line-height:1.45}
-.nf .row.off{opacity:.5;cursor:default}
+.nf-list{list-style:none;margin:4px 0 0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.nf-list li{display:flex;align-items:center;gap:8px;padding:8px 6px 8px 12px}
+.nf-list li + li{border-top:1px solid var(--line)}
+.nf-list li span{flex:1}
+.nf-list li small{display:block;color:var(--muted);font-size:12.5px}
+.nf-list .del{flex:none;width:40px;height:36px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px}
 .nf-quick{margin-top:6px;padding-top:4px!important;border-top:1px solid var(--line)}
 .nf-quick.hl{animation:nfhl 1.6s ease}
 @keyframes nfhl{0%,40%{background:color-mix(in srgb,var(--accent) 16%,transparent)}100%{background:transparent}}
-.sheet .nf-quick .btn{width:100%;margin:8px 0 0;text-align:left;padding:11px 14px}
+.sheet .nf-quick .btn{width:100%;margin:10px 0 0;text-align:left;padding:11px 14px}
 .sheet .nf-quick .btn small{display:block;font-weight:normal;font-size:12.5px;opacity:.85}
 .sheet .nf-quick .btn.sub{background:var(--surface-2);color:var(--text)}
-.nf-quick .nf-state{margin:4px 0 0;font-weight:700}
-.nf-quick .nf-state small{display:block;font-weight:normal;color:var(--muted);font-size:12.5px}
+.nf-quick .nf-state{margin:10px 0 0;font-weight:700}
 .nf-quick .small{margin:8px 0 0}
 .nf-quick .more{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:8px 0 0}
+.cal .d{position:relative}
+.cal .d .bell{position:absolute;top:2px;right:2px;font-size:10px;line-height:1}
 .cal .d,.day-card{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 [hidden]{display:none!important}
 </style>
@@ -925,7 +919,7 @@ function renderCal(){
     const cats = catsOn(d), mv = movedOn(d);
     const cls = ["d", d.getDay() === 0 ? "sun" : d.getDay() === 6 ? "sat" : "", HOLIDAYS.has(k) ? "hol" : "", d < today ? "past" : "", +d === +today ? "is-today" : ""].filter(Boolean).join(" ");
     const label = `${mo+1}月${day}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`;
-    html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => tag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}</button>`;
+    html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => tag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}${NATIVE && hasDay(k) ? `<span class="bell" aria-label="通知あり">🔔</span>` : ""}</button>`;
   }
   html += `</div><div class="legend">` + CAL_ORDER.filter(c => sched().rules[c]).map(c => `<span><i style="--cc:${cssVar(c)}"></i>${esc(SHORT[c])}＝${esc(LONG[c])}</span>`).join("") + `</div>
     <p class="small" style="margin:10px 0 0">日付をタップすると、出せるごみの詳しい出し方が見られます。${Object.keys(sched().moved).length ? "祝日などで収集日が移った日には「振替」と表示しています。" : ""}</p></div>`;
@@ -1220,39 +1214,51 @@ $("#view-cal").addEventListener("click", e => {
 });
 
 /* ===== 通知（3.1） =====
-   「何を・いつ知らせるか」（設定 notify）はどこでも同じ。知らせ方だけ、動いている場所で切り替える。
-   ・ストアのアプリ（Capacitor で包んだもの。NATIVE）… スマホの中で通知を予約する（ローカル通知。サーバーはいらない）。
-       iPhone は予約が64件までなので、近い順に60件だけ予約し、アプリを開くたびに予約し直す。
-   ・ブラウザ版 … 収集日を通知つきでスマホのカレンダーに入れるファイル（.ics）を作る。通知はスマホのカレンダーが出す。
-   どちらも、カレンダーの日にちをタップ（長押しでも）した画面の「🔔 知らせる」ボタンから、すぐ設定できる。
+   シンプルにする：カレンダーの日にちを長押し（タップでも）して「🔔 この日を知らせる」を押すと、その日だけ1回知らせる。
+   知らせる時刻は、通知の設定のスライドバー1本で決める（前の日の夕方4時〜当日の出す時刻の30分前。どの日も同じ時刻）。
+   ・ストアのアプリ（Capacitor で包んだもの。NATIVE）… スマホの中で通知を予約する（ローカル通知。サーバーはいらない）
+   ・ブラウザ版 … その日の予定を、通知つきでスマホのカレンダーに入れるファイル（.ics）を作る
    ほかに、アプリを開いたときの「あしたは○○の日です」と、ホーム画面のアイコンの数字の印（ブラウザ版の対応するスマホだけ）。
    設定はこのスマホの中（localStorage の gomi31-notify）にだけ保存する。外には送らない。 */
 const LN = NATIVE ? (window.Capacitor.Plugins || {}).LocalNotifications : null;
 const NOTIFY_KEY = "gomi31-notify";
-// 通知の時刻：収集日の0時から何分前（−）か、何分後（＋）か
-const EVE_TIMES = [[-360, "夕方6時"], [-300, "夜7時"], [-240, "夜8時"], [-180, "夜9時"]];
-const MORN_TIMES = [[360, "朝6時"], [390, "朝6時半"], [420, "朝7時"]];
-// on・area：ストアのアプリで通知を予約しているか・どの地区か、off：自治体ごとの「知らせないごみ」、saved：地区ごとの「ファイルを作った日」
-const notify = {on:false, area:"", eve:-300, morn:null, off:{}, remind:true, badge:false, saved:{}};
+// time：収集日の0時から何分前（−）か何分後（＋）か（-300 = 前の日の夜7時）
+// days：知らせる日の一覧 [{a: 地区（areaKey）, k: 日付}]（ストアのアプリだけ）
+const notify = {time:-300, days:[], remind:true, badge:false};
 try { Object.assign(notify, JSON.parse(localStorage.getItem(NOTIFY_KEY) || "{}")); } catch(e){}
-function saveNotify(){ try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(notify)); } catch(e){} }
+if (typeof notify.time !== "number") notify.time = -300;
+if (!Array.isArray(notify.days)) notify.days = [];
+function saveNotify(){ try { localStorage.setItem(NOTIFY_KEY, JSON.stringify({time:notify.time, days:notify.days, remind:notify.remind, badge:notify.badge})); } catch(e){} }
 const areaKey = a => `${a.c}:${a.s}:${a.n}`;
-const offOf = code => notify.off[code] || [];
 const canBadge = !NATIVE && "setAppBadge" in navigator;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const timeName = m => ((m < 0 ? EVE_TIMES : MORN_TIMES).find(([v]) => v === m) || [0, ""])[1];
-// 例：「前の日の夜7時」「前の日の夜7時と当日の朝6時半」
-function whenText(){
-  const w = [];
-  if (notify.eve != null) w.push("前の日の" + timeName(notify.eve));
-  if (notify.morn != null) w.push("当日の" + timeName(notify.morn));
-  return w.join("と") || "前の日の夜7時";
+
+// ---- 時刻 ----
+const cutOfArea = a => { const cy = CITIES[a.c]; return (cy.cal.schedules[a.s] && cy.cal.schedules[a.s].cut) || cy.cut; };
+// 例：19:00 → 夜7時、6:30 → 朝6時半
+function clock(min){
+  const h = Math.floor(min / 60), m = min % 60;
+  const word = h < 11 ? "朝" : h < 16 ? "昼" : h < 18 ? "夕方" : "夜";
+  return `${word}${h > 12 ? h - 12 : h}時${m === 30 ? "半" : m ? m + "分" : ""}`;
 }
-// その日に出すごみ（「知らせるごみ」でえらんだものだけ。カレンダーの並び順）
-function notifyCats(k){
-  const off = offOf(CITY_ID);
-  return (sched().days[k] || []).filter(c => !off.includes(c)).sort((x, y) => CAL_ORDER.indexOf(x) - CAL_ORDER.indexOf(y));
+const timeLabel = m => m < 0 ? "前の日の" + clock(m + 1440) : "当日の" + clock(m);
+// スライドバーの目盛り（30分きざみ）：前の日の夕方4時〜夜11時半、当日の朝5時〜出す時刻の30分前
+function timeSteps(a){
+  const c = a && CITIES[a.c] ? cutOfArea(a) : [8, 0], last = c[0] * 60 + c[1] - 30, out = [];
+  for (let m = 16 * 60; m <= 23 * 60 + 30; m += 30) out.push(m - 1440);
+  for (let m = 5 * 60; m <= last; m += 30) out.push(m);
+  return out;
 }
+// 地区 a の収集日 k に知らせる日時（当日の朝は、その地区の出す時刻より前になるようにする）
+function notifyAt(a, k){
+  const c = cutOfArea(a), lim = c[0] * 60 + c[1] - 30;
+  const m = notify.time >= 0 ? Math.min(notify.time, lim) : notify.time;
+  return new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10), 0, m);
+}
+const atLabel = d => `${md(d)} ${clock(d.getHours() * 60 + d.getMinutes())}`;
+
+// ---- アプリを開いたときのお知らせ・アイコンの印 ----
+const notifyCats = k => (sched().days[k] || []).slice().sort((x, y) => CAL_ORDER.indexOf(x) - CAL_ORDER.indexOf(y));
 // きょう（出す時刻の前）か、あしたに出すごみ
 function soonCats(){
   if (!CAL || !calState.area || calState.area.c !== CITY_ID) return null;
@@ -1268,7 +1274,6 @@ function remindHtml(){
     <p><b>${s.when}は ${s.cs.map(c => esc(LONG[c])).join("・")} の日です</b></p>
     <small>${s.when === "きょう" ? "" : "あすの"}${cutText()}までに出してください。</small></div></div>`;
 }
-// ホーム画面のアイコンの数字の印（ブラウザ版の対応しているスマホだけ。アプリを開いたときに変わる）
 function updateBadge(){
   if (!canBadge) return;
   try {
@@ -1278,67 +1283,55 @@ function updateBadge(){
 }
 setInterval(updateBadge, 60000);
 
-// ---- 地区ごとの、知らせる収集日（どの市の地区でも使えるように、表示中の市に頼らない）----
-const cutOfArea = a => { const cy = CITIES[a.c]; return (cy.cal.schedules[a.s] && cy.cal.schedules[a.s].cut) || cy.cut; };
-const cutTextOf = a => { const c = cutOfArea(a); return `朝${c[0]}時${c[1] === 30 ? "半" : c[1] ? c[1] + "分" : ""}`; };
-// きょう〜年度末（きょうの出す時刻を過ぎていたら、あしたから）の収集日。「知らせるごみ」だけ
-function areaEvents(a){
-  const cy = a && CITIES[a.c], sc = cy && cy.cal.schedules[a.s];
-  if (!sc) return [];
-  const off = offOf(a.c), t = now(), c = cutOfArea(a);
-  const late = t.getHours() * 60 + t.getMinutes() >= c[0] * 60 + c[1];
-  const from = ymd(late ? addDays(today0(), 1) : today0());
-  const first = `${cy.cal.year}-04-01`, last = `${cy.cal.year + 1}-03-31`;
-  return Object.keys(sc.days).filter(k => k >= from && k >= first && k <= last).sort().map(k => ({
-    k, d: new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10)), mv: sc.moved[k] || [],
-    cs: sc.days[k].filter(x => !off.includes(x)).sort((x, y) => cy.calOrder.indexOf(x) - cy.calOrder.indexOf(y))
-  })).filter(e => e.cs.length);
+// ---- 知らせる日（ストアのアプリ）----
+const hasDay = k => calState.area && notify.days.some(x => x.a === areaKey(calState.area) && x.k === k);
+// これから知らせる日（地区が消えたもの・知らせる時刻を過ぎたものは除く）
+function upcoming(){
+  const t0 = new Date();
+  return notify.days.map(x => ({...x, area: calState.areas.find(a => areaKey(a) === x.a)}))
+    .filter(x => x.area && CITIES[x.area.c] && (CITIES[x.area.c].cal.schedules[x.area.s].days[x.k] || []).length && notifyAt(x.area, x.k) > t0)
+    .sort((x, y) => notifyAt(x.area, x.k) - notifyAt(y.area, y.k));
 }
-
-// ---- ストアのアプリ：スマホの中で通知を予約する ----
-const nativeInfo = {count:0, next:null};
-const notifyArea = () => calState.areas.find(a => areaKey(a) === notify.area) || null;
 async function scheduleNative(){
   if (!LN) return;
   try {
+    await Promise.all([...new Set(notify.days.map(x => x.a.split(":")[0]))].filter(c => MUNI[c]).map(c => loadCity(c).catch(() => {})));
     const pend = await LN.getPending();
     if (pend.notifications.length) await LN.cancel({notifications: pend.notifications.map(n => ({id: n.id}))});
-    nativeInfo.count = 0; nativeInfo.next = null;
-    const a = notify.on && notifyArea();
-    if (!a) return;
-    await loadCity(a.c);
-    const cy = CITIES[a.c], cut = cutTextOf(a), list = [], t0 = new Date();
-    for (const e of areaEvents(a)){
-      const names = e.cs.map(c => cy.long[c]).join("・");
-      for (const m of [notify.eve, notify.morn]){
-        if (m == null) continue;
-        const at = new Date(e.d.getFullYear(), e.d.getMonth(), e.d.getDate(), 0, m);
-        if (at > t0) list.push({title: `${m < 0 ? "あした" : "きょう"}は ${names} の日`,
-          body: `${m < 0 ? "あすの" : ""}${cut}までに出してください（${a.n}）`, schedule: {at, allowWhileIdle: true},
-          // Android：ぴったりの時刻の「アラーム」の許可（ストアの審査で使い道を聞かれる）は使わない。数分ずれることがある
-          isExactNotification: false});
-      }
-    }
-    list.sort((x, y) => x.schedule.at - y.schedule.at);
-    const use = list.slice(0, 60).map((n, i) => ({...n, id: i + 1}));
-    if (use.length) await LN.schedule({notifications: use});
-    nativeInfo.count = use.length; nativeInfo.next = use.length ? use[0].schedule.at : null;
+    const list = upcoming();
+    // 過ぎたものは一覧から外す
+    if (list.length !== notify.days.length){ notify.days = list.map(x => ({a: x.a, k: x.k})); saveNotify(); }
+    if (!list.length) return;
+    await LN.schedule({notifications: list.slice(0, 60).map((x, i) => {
+      const cy = CITIES[x.area.c], at = notifyAt(x.area, x.k), c = cutOfArea(x.area);
+      const names = (cy.cal.schedules[x.area.s].days[x.k] || []).slice().sort((p, q) => cy.calOrder.indexOf(p) - cy.calOrder.indexOf(q)).map(n => cy.long[n]).join("・");
+      const eve = notify.time < 0;
+      return {id: i + 1, title: `${eve ? "あした" : "きょう"}は ${names} の日`,
+        body: `${eve ? "あすの" : ""}朝${c[0]}時${c[1] === 30 ? "半" : c[1] ? c[1] + "分" : ""}までに出してください（${x.area.n}）`,
+        // Android：ぴったりの時刻の「アラーム」の許可（ストアの審査で使い道を聞かれる）は使わない。数分ずれることがある
+        schedule: {at, allowWhileIdle: true}, isExactNotification: false};
+    })});
   } catch(e){ console.warn("通知の予約に失敗", e); }
 }
-async function nativeOn(a){
+async function canNotify(){
   try {
     let p = await LN.checkPermissions();
     if (p.display !== "granted") p = await LN.requestPermissions();
-    if (p.display !== "granted") return false;
+    return p.display === "granted";
   } catch(e){ return false; }
-  notify.on = true; notify.area = areaKey(a); saveNotify();
+}
+async function addDay(k){
+  if (!(await canNotify())) return false;
+  notify.days.push({a: areaKey(calState.area), k}); saveNotify();
   await scheduleNative();
   return true;
 }
-async function nativeOff(){ notify.on = false; saveNotify(); await scheduleNative(); }
-const nativeOnHere = () => NATIVE && notify.on && calState.area && notify.area === areaKey(calState.area);
+async function removeDay(a, k){
+  notify.days = notify.days.filter(x => !(x.a === a && x.k === k)); saveNotify();
+  await scheduleNative();
+}
 
-// ---- ブラウザ版：カレンダーに登録するファイル（.ics）----
+// ---- ブラウザ版：その日を、通知つきでスマホのカレンダーに入れるファイル（.ics）----
 const icsEsc = s => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 // 1行は75バイトまで（長い行は、文字の途中で切らないように折り返す）
 function icsFold(line){
@@ -1352,193 +1345,112 @@ function icsFold(line){
   return out;
 }
 const icsDur = m => { const v = Math.abs(m), h = Math.floor(v / 60), mm = v % 60; return `${m < 0 ? "-" : ""}PT${h ? h + "H" : ""}${mm || !h ? mm + "M" : ""}`; };
-function icsText(a, evs){
-  const cy = CITIES[a.c], cut = cutTextOf(a);
+function icsText(a, k){
+  const cy = CITIES[a.c], d = new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10)), c = cutOfArea(a);
+  const cs = (cy.cal.schedules[a.s].days[k] || []).slice().sort((p, q) => cy.calOrder.indexOf(p) - cy.calOrder.indexOf(q));
+  const names = cs.map(x => cy.long[x]).join("・"), cut = `朝${c[0]}時${c[1] === 30 ? "半" : c[1] ? c[1] + "分" : ""}`;
+  const at = notifyAt(a, k), trig = Math.round((at - d) / 60000);
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
   const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//gomi-navi//gomiappV3.1//JA", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-    "X-WR-CALNAME:" + icsEsc(`ごみ出し（${a.n}）`), "X-WR-TIMEZONE:Asia/Tokyo"];
-  evs.forEach(({k, d, cs, mv}) => {
-    const names = cs.map(c => cy.long[c]).join("・");
-    L.push("BEGIN:VEVENT", `UID:${a.c}-${a.s}-${k.replace(/-/g, "")}@gomi-navi`, "DTSTAMP:" + stamp,
-      "DTSTART;VALUE=DATE:" + k.replace(/-/g, ""), "DTEND;VALUE=DATE:" + ymd(addDays(d, 1)).replace(/-/g, ""),
-      "SUMMARY:" + icsEsc(`🗑 ${names}${cs.some(c => mv.includes(c)) ? "（振替）" : ""}`),
-      "DESCRIPTION:" + icsEsc(`${cut}までに決められた場所へ出してください。\n` + cs.map(c => `・${cy.long[c]}：${cy.bag[c]}`).join("\n")
-        + `\n\n${a.n}（${areaSub(a)}）\nごみ出しカレンダー（非公式）で作りました。最新の情報は市のカレンダーやホームページで確かめてください。`),
-      "TRANSP:TRANSPARENT");
-    [notify.eve, notify.morn].forEach(t => {
-      if (t == null) return;
-      L.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + icsEsc(`${t < 0 ? "あした" : "きょう"}は${names}の日`), "TRIGGER:" + icsDur(t), "END:VALARM");
-    });
-    L.push("END:VEVENT");
-  });
-  L.push("END:VCALENDAR");
+    "BEGIN:VEVENT", `UID:${a.c}-${a.s}-${k.replace(/-/g, "")}@gomi-navi`, "DTSTAMP:" + stamp,
+    "DTSTART;VALUE=DATE:" + k.replace(/-/g, ""), "DTEND;VALUE=DATE:" + ymd(addDays(d, 1)).replace(/-/g, ""),
+    "SUMMARY:" + icsEsc(`🗑 ${names}`),
+    "DESCRIPTION:" + icsEsc(`${cut}までに決められた場所へ出してください。\n` + cs.map(x => `・${cy.long[x]}：${cy.bag[x]}`).join("\n")
+      + `\n\n${a.n}（${areaSub(a)}）\nごみ出しカレンダー（非公式）で作りました。最新の情報は市のカレンダーやホームページで確かめてください。`),
+    "TRANSP:TRANSPARENT",
+    "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + icsEsc(`${trig < 0 ? "あした" : "きょう"}は${names}の日`), "TRIGGER:" + icsDur(trig), "END:VALARM",
+    "END:VEVENT", "END:VCALENDAR"];
   return L.map(icsFold).join("\r\n") + "\r\n";
 }
-const icsName = a => `ごみ出し_${a.n.replace(/[\\/:*?"<>|\s]/g, "")}.ics`;
-const canShareFile = (() => { try { return !NATIVE && !!(navigator.canShare && navigator.canShare({files:[new File(["x"], "a.ics", {type:"text/calendar"})]})); } catch(e){ return false; } })();
-async function makeIcs(share){
-  const a = calState.area, evs = areaEvents(a);
-  if (!evs.length) return false;
-  const text = icsText(a, evs), name = icsName(a);
-  if (share){
-    try { await navigator.share({files:[new File([text], name, {type:"text/calendar"})], title:"ごみ出しカレンダー"}); }
-    catch(e){ return false; }
-  } else {
-    const url = URL.createObjectURL(new Blob([text], {type:"text/calendar;charset=utf-8"}));
-    const link = document.createElement("a");
-    link.href = url; link.download = name;
-    document.body.appendChild(link); link.click(); link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
-  notify.saved[areaKey(a)] = `${md(now())}・${evs.length}日分`;
-  saveNotify();
-  const done = $("#nfDone");
-  if (done) done.innerHTML = `<b>ファイルを作りました。</b>下の「登録のしかた」の順に、カレンダーに追加してください。`;
-  renderCal();
-  return true;
+function saveIcs(k){
+  const a = calState.area;
+  const url = URL.createObjectURL(new Blob([icsText(a, k)], {type:"text/calendar;charset=utf-8"}));
+  const link = document.createElement("a");
+  link.href = url; link.download = `ごみ出し_${k}.ics`;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-// ---- 日にちの画面の「🔔 知らせる」（1タップで設定）----
+// ---- 日にちの画面の「🔔 この日を知らせる」----
 function quickHtml(k){
-  const a = calState.area, d = new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10));
-  const cats = catsOn(d);
-  if (nativeOnHere()){
-    const off = offOf(a.c), on = CAL_ORDER.filter(c => sched().rules[c] && !off.includes(c));
-    return `<div class="sec nf-quick" id="nfQuick"><h3>🔔 通知</h3>
-      <p class="nf-state">${esc(whenText())}に知らせています<small>${on.map(c => esc(LONG[c])).join("・")}</small></p>
-      <button class="btn sub" data-nfoff>通知をやめる</button>
-      <button class="more" data-notify-open>時刻や種類を変える →</button></div>`;
-  }
-  return `<div class="sec nf-quick" id="nfQuick"><h3>🔔 通知</h3>
-    <button class="btn" data-quick="all">🔔 ${esc(whenText())}に知らせる<small>この地区のすべての収集日</small></button>
-    ${cats.map(c => `<button class="btn sub" data-quick="cat" data-cat="${esc(c)}">🔔 ${esc(LONG[c])}だけ知らせる</button>`).join("")}
-    <p class="small" id="nfQuickMsg">${NATIVE ? "" : "スマホのカレンダーに、通知つきで入れます。最後に出る画面で「追加」を押すと完了です。"}</p>
-    <button class="more" data-notify-open>時刻や種類を変える →</button></div>`;
-}
-async function quickNotify(kind, cat){
   const a = calState.area;
-  if (!a || !CAL) return;
-  const cats = CAL_ORDER.filter(c => sched().rules[c]);
-  notify.off[a.c] = kind === "cat" ? cats.filter(c => c !== cat) : [];
-  if (notify.eve == null && notify.morn == null) notify.eve = -300;
-  saveNotify();
+  if (!a || !(sched().days[k] || []).length) return "";
+  const at = notifyAt(a, k), past = at <= new Date();
+  let body;
+  if (NATIVE && hasDay(k)) body = `<p class="nf-state">🔔 ${esc(atLabel(at))}に知らせます</p><button class="btn sub" data-nfoff="${k}">知らせるのをやめる</button>`;
+  else if (past) body = `<p class="small">知らせる時刻（${esc(atLabel(at))}）を過ぎています。</p>`;
+  else body = `<button class="btn" data-quick="${k}">🔔 この日を知らせる<small>${esc(atLabel(at))}に、1回だけ${NATIVE ? "" : "（スマホのカレンダーに入れます）"}</small></button>
+    <p class="small" id="nfQuickMsg"></p>`;
+  return `<div class="sec nf-quick" id="nfQuick">${body}<button class="more" data-notify-open>時刻を変える →</button></div>`;
+}
+async function quickNotify(k){
   const msg = () => $("#nfQuickMsg");
   if (NATIVE){
-    const ok = await nativeOn(a);
-    if (ok && state.day) openDay(state.day, true);
+    if (await addDay(k)){ renderCal(); openDay(k); }
     else if (msg()) msg().textContent = "通知が許可されていません。スマホの「設定」で、このアプリの通知を許可してください。";
   } else {
-    const ok = await makeIcs(false);
-    if (msg()) msg().innerHTML = ok ? "<b>ファイルを作りました。</b>出てきた画面で「追加」（または「すべてを追加」）を押すと完了です。うまく出ないときは「時刻や種類を変える」の中の「登録のしかた」を見てください。"
-      : "知らせる収集日がありません。";
+    saveIcs(k);
+    if (msg()) msg().innerHTML = "<b>ファイルを作りました。</b>出てきた画面で「追加」を押すと完了です（iPhone は「カレンダーに追加」、Android はカレンダーのアプリで開く）。";
   }
-  renderCal();
 }
 
 function notifyStatus(){
   if (NATIVE){
-    const a = notifyArea();
-    return notify.on && a ? `${whenText()}に知らせています（${a.n}）` : "オフ。カレンダーの日にちをタップ（長押し）すると、すぐ設定できます";
+    const u = upcoming();
+    if (u.length){
+      const x = u[0], cy = CITIES[x.area.c];
+      return `つぎ：${atLabel(notifyAt(x.area, x.k))}（${(cy.cal.schedules[x.area.s].days[x.k] || []).map(c => cy.long[c]).join("・")}）${u.length > 1 ? `ほか${u.length - 1}件` : ""}`;
+    }
   }
-  const s = calState.area && notify.saved[areaKey(calState.area)];
-  return s ? `カレンダーに登録するファイルを作りました（${s}）` : "カレンダーの日にちをタップ（長押し）すると、すぐ設定できます";
+  return `日にちを長押しすると、その日を${timeLabel(notify.time)}に知らせます`;
 }
-function updateNfCount(){
-  const el = $("#nfCount");
-  if (!el) return;
-  if (NATIVE){
-    const n = nativeInfo.next;
-    el.textContent = !nativeOnHere() ? "" : nativeInfo.count
-      ? `予約している通知 ${nativeInfo.count}件（つぎ：${md(n)} ${n.getHours()}:${pad(n.getMinutes())}）。アプリを開くたびに、先の分を予約し直します`
-      : "予約できる通知がありません。知らせるごみや時刻を見直してください。";
-    return;
-  }
-  const evs = areaEvents(calState.area), none = notify.eve == null && notify.morn == null;
-  el.textContent = evs.length
-    ? `${md(evs[0].d)}〜${md(evs[evs.length-1].d)} の ${evs.length}日分が入ります${none ? "（時刻が「知らせない」なので、通知は出ません）" : ""}`
-    : "入る収集日がありません。知らせるごみをえらんでください。";
-  document.querySelectorAll("[data-ics],[data-ics-share]").forEach(b => b.disabled = !evs.length);
+function nfListHtml(){
+  const u = upcoming();
+  return u.length ? `<ul class="nf-list">${u.map(x => {
+    const cy = CITIES[x.area.c], names = (cy.cal.schedules[x.area.s].days[x.k] || []).map(c => cy.long[c]).join("・");
+    return `<li><span><b>${esc(atLabel(notifyAt(x.area, x.k)))}</b><small>${esc(names)}${calState.areas.length > 1 ? `（${esc(x.area.n)}）` : ""}</small></span><button class="del" data-nfdel="${esc(x.a)}|${x.k}" aria-label="やめる">✕</button></li>`;
+  }).join("")}</ul>` : `<p class="small">まだありません。カレンダーの日にちを長押しして「🔔 この日を知らせる」を押してください。</p>`;
 }
 function openNotify(){
   const a = calState.area;
   if (!a || !CAL) return;
-  const off = offOf(a.c), cats = CAL_ORDER.filter(c => sched().rules[c]);
-  const opt = (list, v) => `<option value="">知らせない</option>` + list.map(([m, t]) => `<option value="${m}"${m === v ? " selected" : ""}>${t}</option>`).join("");
-  const saved = notify.saved[areaKey(a)], other = NATIVE && notify.on && !nativeOnHere() && notifyArea();
-  const common = `
-      <h3>知らせるごみ</h3>
-      <div class="opts">${cats.map(c => `<label class="opt"><input type="checkbox" data-nf="cat" value="${esc(c)}"${off.includes(c) ? "" : " checked"}><i style="--cc:${cssVar(c)}"></i>${esc(LONG[c])}</label>`).join("")}</div>
-      <h3>知らせる時刻</h3>
-      <div class="times">
-        <label>前の日<select data-nf="eve">${opt(EVE_TIMES, notify.eve)}</select></label>
-        <label>当日の朝<select data-nf="morn">${opt(MORN_TIMES, notify.morn)}</select></label>
-      </div>
-      <p class="count" id="nfCount"></p>`;
-  const top = NATIVE ? `
-      <h3>このスマホで知らせる</h3>
-      <label class="row"><input type="checkbox" data-nf="on"${nativeOnHere() ? " checked" : ""}><span>通知をオンにする
-        <small>地区：${esc(a.n)}（${esc(areaSub(a))}）${other ? `<br>いまは「${esc(other.n)}」の通知が入っています。オンにすると、この地区に切り替わります。` : ""}</small></span></label>
-      <p class="small" id="nfMsg" style="margin:0"></p>${common}`
-    : `
-      <h3>スマホのカレンダーで知らせる</h3>
-      <p>収集日を、通知つきでスマホのカレンダー（iPhone の「カレンダー」や Google カレンダーなど）に入れます。アプリを閉じていても、電波がなくても、スマホが知らせます。</p>
-      <p class="small">地区：<b>${esc(a.n)}</b>（${esc(areaSub(a))}）${calState.areas.length > 1 ? "<br>ほかの地区の分は、カレンダーの画面で地区を切り替えてから作ってください。" : ""}</p>${common}
-      <button class="btn" data-ics style="width:100%;margin:10px 0 0">カレンダーに登録するファイルを作る</button>
-      ${canShareFile ? `<button class="btn sub" data-ics-share style="width:100%;margin:8px 0 0">共有メニューから開く</button>` : ""}
-      <p class="done" id="nfDone">${saved ? `前にファイルを作った日：${esc(saved)}` : ""}</p>
-      <details><summary>iPhone での登録のしかた</summary><ol>
-        <li>上の「カレンダーに登録するファイルを作る」をタップします。</li>
-        <li>カレンダーの画面が出たら「すべてを追加」をタップします。「ダウンロード」と聞かれたときは、ダウンロードしてから、ダウンロードの印（または「ファイル」アプリ）でファイルを開きます。</li>
-        <li>追加先は「新規カレンダー」で「ごみ出し」という名前にしておくと、あとで消すのがかんたんです。</li>
-        <li>うまく開かないときは、ホーム画面のアプリではなく、Safari でこのページを開いて、もう一度ためしてください。</li>
-        <li>鳴らないときは、iPhone の「設定」→「通知」→「カレンダー」で、通知をオンにしてください。</li>
-      </ol></details>
-      <details><summary>Android での登録のしかた</summary><ol>
-        <li>上の「カレンダーに登録するファイルを作る」をタップして、ファイルを保存します。</li>
-        <li>保存したファイルを開き、スマホのカレンダーアプリ（Galaxy の「カレンダー」など）で追加します。</li>
-        <li>Google カレンダーは、スマホのアプリではファイルを読みこめません。パソコンのブラウザで Google カレンダーを開いて、次の順にします。
-          <br>① 左の「他のカレンダー」の＋ →「新しいカレンダーを作成」で「ごみ出し」を作る
-          <br>② 「ごみ出し」の設定で、「終日の予定の通知」を「1日前 19:00」などにする（Google カレンダーは、ファイルに入っている通知の時刻を使わないため）
-          <br>③ 設定の「インポート / エクスポート」で、このファイルと「ごみ出し」カレンダーをえらんで「インポート」</li>
-      </ol></details>
-      <p class="small" style="margin-top:10px">カレンダーに入るのは ${CAL.year + 1}年3月31日（${nendo(CAL)}の終わり）までです。毎年4月に新しい収集日が入ったら、前の「ごみ出し」カレンダーを消してから、もう一度登録してください。ごみの種類や時刻を変えたときも同じです。</p>`;
+  const steps = timeSteps(a);
+  let i = steps.indexOf(notify.time);
+  if (i < 0) i = steps.reduce((b, m, j) => Math.abs(m - notify.time) < Math.abs(steps[b] - notify.time) ? j : b, 0);
   const sh = $("#sheet");
   sh.innerHTML = `<div class="grab"></div>
     <div class="sh-top"><h2 id="shTitle">通知の設定</h2><button class="x" data-close aria-label="閉じる">✕</button></div>
-    <div class="sec nf">${top}
+    <div class="sec nf">
+      <p>カレンダーの日にちを長押し（タップでも）して「🔔 この日を知らせる」を押すと、その日だけ1回知らせます。${NATIVE ? "" : "スマホのカレンダーに、通知つきで入れます。"}</p>
+      <h3>知らせる時刻</h3>
+      <p class="nf-time" id="nfTime">${esc(timeLabel(steps[i]))}</p>
+      <input type="range" class="nf-range" data-nf="time" min="0" max="${steps.length - 1}" step="1" value="${i}" aria-label="知らせる時刻">
+      <div class="nf-scale"><span>前の日の夕方</span><span>夜</span><span>当日の朝</span></div>
+      ${NATIVE ? `<h3>知らせる日</h3><div id="nfList">${nfListHtml()}</div>` : ""}
       <h3>アプリを開いたとき</h3>
-      <label class="row"><input type="checkbox" data-nf="remind"${notify.remind ? " checked" : ""}><span>「あしたは○○の日です」をいちばん上に出す<small>上の「知らせるごみ」でえらんだものだけ出します。</small></span></label>
-      ${NATIVE ? "" : `<label class="row${canBadge ? "" : " off"}"><input type="checkbox" data-nf="badge"${notify.badge && canBadge ? " checked" : ""}${canBadge ? "" : " disabled"}><span>ホーム画面のアイコンに数字の印を付ける
-        <small>${canBadge ? "きょう（出す時刻の前）か、あしたに出すごみの数を出します。印はアプリを開いたときに変わります（閉じている間は変わりません）。"
-          + (isIOS ? "iPhone は、ホーム画面に追加したアプリで「通知を許可」すると使えます。" : "")
-          : "このスマホ（ブラウザ）では使えません。iPhone は、ホーム画面に追加したアプリで使えます。Android のスマホは、ほとんど対応していません。"}</small></span></label>
-      <p class="small" id="nfBadgeMsg" style="margin:0"></p>`}
+      <label class="row"><input type="checkbox" data-nf="remind"${notify.remind ? " checked" : ""}><span>「あしたは○○の日です」をいちばん上に出す</span></label>
+      ${canBadge ? `<label class="row"><input type="checkbox" data-nf="badge"${notify.badge ? " checked" : ""}><span>ホーム画面のアイコンに数字の印を付ける
+        <small>きょう（出す時刻の前）か、あしたに出すごみの数を出します。印はアプリを開いたときに変わります。${isIOS ? "iPhone は、ホーム画面に追加したアプリで「通知を許可」すると使えます。" : ""}</small></span></label>
+      <p class="small" id="nfBadgeMsg" style="margin:0"></p>` : ""}
     </div>`;
-  updateNfCount();
   $("#scrim").classList.add("open"); sh.classList.add("open");
   sh.scrollTop = 0;
 }
-async function onNfChange(el){
-  const a = calState.area, k = el.dataset.nf;
-  if (!a) return;
-  if (k === "on"){
-    if (el.checked){
-      const ok = await nativeOn(a);
-      if (!ok){ el.checked = false; const m = $("#nfMsg"); if (m) m.textContent = "通知が許可されていません。スマホの「設定」で、このアプリの通知を許可してください。"; }
-    } else await nativeOff();
-    updateNfCount(); renderCal();
+async function onNfChange(el, live){
+  const k = el.dataset.nf;
+  if (k === "time"){
+    const steps = timeSteps(calState.area), m = steps[+el.value];
+    $("#nfTime").textContent = timeLabel(m);
+    if (live) return;   // 動かしている間は、文字だけ変える
+    notify.time = m; saveNotify();
+    await scheduleNative();
+    const l = $("#nfList"); if (l) l.innerHTML = nfListHtml();
+    renderCal();
     return;
   }
-  if (k === "cat"){
-    const off = new Set(offOf(a.c));
-    el.checked ? off.delete(el.value) : off.add(el.value);
-    notify.off[a.c] = [...off];
-  } else if (k === "eve" || k === "morn") notify[k] = el.value === "" ? null : +el.value;
-  else if (k === "remind") notify.remind = el.checked;
+  if (k === "remind") notify.remind = el.checked;
   else if (k === "badge") notify.badge = el.checked;
-  saveNotify();
-  if (nativeOnHere() && k !== "remind") await scheduleNative();
-  updateNfCount(); renderCal();
+  saveNotify(); renderCal();
   if (k === "badge" && el.checked && isIOS && "Notification" in window){
     // iPhone は、通知を許可しないとアイコンの印が出ない
     if (Notification.permission === "default"){ try { await Notification.requestPermission(); } catch(e){} }
@@ -1801,12 +1713,13 @@ document.addEventListener("click", e => {
   const cq = e.target.closest("[data-camq]");
   if (cq){ closeSheet(); state.cat = null; state.q = cq.dataset.camq; $("#q").value = state.q; renderChips(); setTab("search"); render(); return; }
   if (e.target.closest("[data-close]") || e.target === $("#scrim")){ closeSheet(); return; }
-  if (e.target.closest("[data-ics]")){ makeIcs(false); return; }
   const qk = e.target.closest("[data-quick]");
-  if (qk){ quickNotify(qk.dataset.quick, qk.dataset.cat); return; }
-  if (e.target.closest("[data-nfoff]")){ nativeOff().then(() => { renderCal(); if (state.day) openDay(state.day); }); return; }
+  if (qk){ quickNotify(qk.dataset.quick); return; }
+  const nfo = e.target.closest("[data-nfoff]");
+  if (nfo){ removeDay(areaKey(calState.area), nfo.dataset.nfoff).then(() => { renderCal(); openDay(nfo.dataset.nfoff); }); return; }
+  const nfd = e.target.closest("[data-nfdel]");
+  if (nfd){ const [a, k] = nfd.dataset.nfdel.split("|"); removeDay(a, k).then(() => { const l = $("#nfList"); if (l) l.innerHTML = nfListHtml(); renderCal(); }); return; }
   if (e.target.closest("[data-notify-open]")){ openNotify(); return; }
-  if (e.target.closest("[data-ics-share]")){ makeIcs(true); return; }
   const g = e.target.closest("[data-guide]");
   if (g){ closeSheet(); setTab("guide"); const el = document.getElementById("cat-" + g.dataset.guide); if (el) window.scrollTo({top: el.offsetTop - $("#hdr").offsetHeight - 8}); return; }
   const f = e.target.closest("[data-filter]");
@@ -1821,6 +1734,7 @@ document.addEventListener("change", e => {
   if (e.target.matches("[data-camfile]")) runCamera(e.target.files[0]);
   if (e.target.matches("[data-nf]")) onNfChange(e.target);
 });
+document.addEventListener("input", e => { if (e.target.matches('[data-nf="time"]')) onNfChange(e.target, true); });
 window.addEventListener("resize", updateHdr);
 
 /* テーマ切替（端末設定 → ライト → ダーク） */
