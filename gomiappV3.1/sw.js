@@ -6,7 +6,7 @@
 // キャッシュの名前は "gomiapp31-" で始める（同じサイトの gomiappV3.0 の "gomiapp30-" は消さない）。
 // もう公開していない前の版（初版 gomi-v1・v2 の gomi2-・v3 の gomi3-）のキャッシュは消す。
 const PREFIX = "gomiapp31-";
-const VERSION = PREFIX + "v1";
+const VERSION = PREFIX + "v2";
 const OLD = ["gomi-v1", "gomi2-", "gomi3-"];
 const FILES = [
   "./",

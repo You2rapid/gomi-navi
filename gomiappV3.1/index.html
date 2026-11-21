@@ -295,6 +295,36 @@ footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
 .geo-res .geo-hd{font-size:15px}
 .geo-res .area-list{box-shadow:none;border:1px solid var(--line);margin:0 0 8px;max-height:none}
 .geo-mark{color:var(--accent)!important;border-color:var(--accent)!important}
+/* 通知（3.1）：開いたときのお知らせ・通知の設定 */
+.remind{display:flex;gap:10px;align-items:flex-start;background:color-mix(in srgb,var(--accent) 11%,var(--surface));border:1.5px solid color-mix(in srgb,var(--accent) 50%,transparent);border-radius:14px;padding:10px 14px;margin:0 0 12px}
+.remind .ic{flex:none;font-size:18px;line-height:1.5}
+.remind p{margin:0;font-size:15px}
+.remind small{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+.notify-open{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;text-align:left;cursor:pointer;padding:2px 0;color:inherit;font:inherit}
+.notify-open .ic{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 14%,var(--surface));font-size:18px}
+.notify-open b{display:block;font-size:15px}
+.notify-open small{display:block;color:var(--muted);font-size:12.5px;line-height:1.45}
+.notify-open .go{margin-left:auto;flex:none;color:var(--muted);font-size:22px}
+.nf p{margin:4px 0 8px;font-size:14px}
+.nf .opts{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}
+.nf label.opt{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:5px 12px 5px 8px;font-size:14px;cursor:pointer}
+.nf label.opt i{width:10px;height:10px;border-radius:50%;background:var(--cc)}
+.nf label.opt:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.nf .times{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 6px}
+.nf .times label{font-size:12.5px;color:var(--muted)}
+.nf select{display:block;width:100%;margin-top:2px;font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--text)}
+.nf .count{font-size:13px;color:var(--muted);margin:8px 0 0}
+.nf .btn:disabled{opacity:.45;cursor:default}
+.nf .btn.sub{background:var(--surface-2);color:var(--text);margin-top:8px}
+.nf .done{margin:10px 0 0;font-size:13.5px}
+.nf details{margin:10px 0 0;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px}
+.nf details summary{cursor:pointer;font-weight:700;color:var(--accent)}
+.nf details ol{margin:6px 0 2px;padding-left:1.3em}
+.nf details li{margin:3px 0}
+.nf .row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:15px;cursor:pointer}
+.nf .row input{flex:none;width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent)}
+.nf .row small{display:block;font-size:12.5px;color:var(--muted);line-height:1.45}
+.nf .row.off{opacity:.5;cursor:default}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -804,6 +834,7 @@ function renderCal(){
     html += `<div class="seg area-switch" role="group" aria-label="表示する地区">${calState.areas.map((x, i) =>
       `<button data-switch="${i}" aria-pressed="${i === calState.cur}">${esc(x.n.replace(/（.*?）/g, ""))}<small>${esc(CITIES[x.c].name)}${CITIES[x.c].schedLabel(x.s) !== x.n ? "・" + esc(CITIES[x.c].schedLabel(x.s)) : ""}</small></button>`).join("")}</div>`;
   }
+  html += remindHtml();
   const ns = inRange(today) ? notices() : [];
   if (ns.length) html += `<div class="notice" role="note"><span class="ic" aria-hidden="true">!</span><div><b class="ttl">お知らせ（これから2週間）</b>${ns.map(n => `<p>${n}</p>`).join("")}</div></div>`;
 
@@ -831,6 +862,9 @@ function renderCal(){
     return `<li>${tag(c)}<span class="dt">${d ? md(d) : "―"}<span class="rule">${esc(sched().rules[c])}</span></span><span class="in${when === "きょう" || when === "あした" ? " soon" : ""}">${when}</span></li>`;
   }).join("") + `</ul></div>`;
 
+  // 通知の設定（3.1）
+  html += `<div class="card"><button class="notify-open" data-notify><span class="ic" aria-hidden="true">🔔</span><span><b>通知の設定</b><small>${esc(notifyStatus())}</small></span><span class="go" aria-hidden="true">›</span></button></div>`;
+
   // 月カレンダー
   const m = calState.month, y = m.getFullYear(), mo = m.getMonth();
   const first = new Date(y, mo, 1), ndays = new Date(y, mo + 1, 0).getDate();
@@ -853,6 +887,7 @@ function renderCal(){
     <p class="small" style="margin:10px 0 0">日付をタップすると、出せるごみの詳しい出し方が見られます。${Object.keys(sched().moved).length ? "祝日などで収集日が移った日には「振替」と表示しています。" : ""}</p></div>`;
   if (!inRange(today)) html += `<div class="empty">このアプリには${nendo(CAL)}（${CAL.year}年4月〜${CAL.year + 1}年3月）の収集日が入っています。新しい年度のカレンダーが出たら更新してください。</div>`;
   v.innerHTML = html;
+  updateBadge();
 }
 
 function renderPicker(){
@@ -1107,6 +1142,7 @@ $("#view-cal").addEventListener("click", e => {
   if (pf){ pickCity(MUNIS.find(m => m.pref === pf.dataset.pref).code); return; }
   if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; calState.geo = null; renderCal(); window.scrollTo({top:0}); return; }
   if (e.target.closest("[data-geo]")){ findByGps(); return; }
+  if (e.target.closest("[data-notify]")){ openNotify(); return; }
   const sw = e.target.closest("[data-switch]");
   if (sw){ switchArea(+sw.dataset.switch); return; }
   const rm = e.target.closest("[data-remove]");
@@ -1118,6 +1154,201 @@ $("#view-cal").addEventListener("click", e => {
   const sc = e.target.closest("[data-sched]");
   if (sc){ setArea({r:"", n:CITIES[calState.city].schedLabel(sc.dataset.sched), s:sc.dataset.sched}); return; }
 });
+
+/* ===== 通知（3.1） =====
+   A. 収集日を、通知つきでスマホのカレンダーに入れるファイル（.ics）を作る。
+      通知はスマホのカレンダーが出すので、アプリを閉じていても、電波がなくても知らせる。サーバーは使わない。
+   C. アプリを開いたときの「あしたは○○の日です」と、ホーム画面のアイコンの数字の印。
+   設定はこのスマホの中（localStorage の gomi31-notify）にだけ保存する。外には送らない。 */
+const NOTIFY_KEY = "gomi31-notify";
+// 通知の時刻：収集日の0時から何分前（−）か、何分後（＋）か
+const EVE_TIMES = [[-360, "夕方6時"], [-300, "夜7時"], [-240, "夜8時"], [-180, "夜9時"]];
+const MORN_TIMES = [[360, "朝6時"], [390, "朝6時半"], [420, "朝7時"]];
+// off：自治体ごとの「知らせないごみ」、saved：地区ごとの「ファイルを作った日」
+const notify = {eve:-300, morn:null, off:{}, remind:true, badge:false, saved:{}};
+try { Object.assign(notify, JSON.parse(localStorage.getItem(NOTIFY_KEY) || "{}")); } catch(e){}
+function saveNotify(){ try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(notify)); } catch(e){} }
+const areaKey = a => `${a.c}:${a.s}:${a.n}`;
+const offOf = code => notify.off[code] || [];
+const canBadge = "setAppBadge" in navigator;
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// その日に出すごみ（「知らせるごみ」でえらんだものだけ。カレンダーの並び順）
+function notifyCats(k){
+  const off = offOf(CITY_ID);
+  return (sched().days[k] || []).filter(c => !off.includes(c)).sort((x, y) => CAL_ORDER.indexOf(x) - CAL_ORDER.indexOf(y));
+}
+// きょう（出す時刻の前）か、あしたに出すごみ
+function soonCats(){
+  if (!CAL || !calState.area || calState.area.c !== CITY_ID) return null;
+  const td = today0(), tm = addDays(td, 1);
+  if (inRange(td) && !isLate(now())){ const cs = notifyCats(ymd(td)); if (cs.length) return {when:"きょう", cs}; }
+  if (inRange(tm)){ const cs = notifyCats(ymd(tm)); if (cs.length) return {when:"あした", cs}; }
+  return null;
+}
+function remindHtml(){
+  const s = notify.remind && soonCats();
+  if (!s) return "";
+  return `<div class="remind" role="status"><span class="ic" aria-hidden="true">🔔</span><div>
+    <p><b>${s.when}は ${s.cs.map(c => esc(LONG[c])).join("・")} の日です</b></p>
+    <small>${s.when === "きょう" ? "" : "あすの"}${cutText()}までに出してください。</small></div></div>`;
+}
+// ホーム画面のアイコンの数字の印（対応しているスマホだけ。アプリを開いたときに変わる）
+function updateBadge(){
+  if (!canBadge) return;
+  try {
+    const s = notify.badge && soonCats(), n = s ? s.cs.length : 0;
+    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  } catch(e){}
+}
+setInterval(updateBadge, 60000);
+
+// カレンダーに入れる日（きょう〜年度末。きょうの出す時刻を過ぎていたら、あしたから）
+function icsEvents(){
+  const from = ymd(isLate(now()) ? addDays(today0(), 1) : today0());
+  return Object.keys(sched().days).filter(k => k >= from && inRange(new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10)))).sort()
+    .map(k => ({k, cs:notifyCats(k), mv:movedOn(new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10)))})).filter(e => e.cs.length);
+}
+const icsEsc = s => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+// 1行は75バイトまで（長い行は、文字の途中で切らないように折り返す）
+function icsFold(line){
+  const enc = new TextEncoder();
+  let out = "", n = 0;
+  for (const ch of line){
+    const b = enc.encode(ch).length;
+    if (n + b > 75){ out += "\r\n "; n = 1; }
+    out += ch; n += b;
+  }
+  return out;
+}
+const icsDur = m => { const v = Math.abs(m), h = Math.floor(v / 60), mm = v % 60; return `${m < 0 ? "-" : ""}PT${h ? h + "H" : ""}${mm || !h ? mm + "M" : ""}`; };
+function icsText(evs){
+  const a = calState.area, cut = cutText();
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//gomi-navi//gomiappV3.1//JA", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    "X-WR-CALNAME:" + icsEsc(`ごみ出し（${a.n}）`), "X-WR-TIMEZONE:Asia/Tokyo"];
+  evs.forEach(({k, cs, mv}) => {
+    const d = new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10)), names = cs.map(c => LONG[c]).join("・");
+    L.push("BEGIN:VEVENT", `UID:${a.c}-${a.s}-${k.replace(/-/g, "")}@gomi-navi`, "DTSTAMP:" + stamp,
+      "DTSTART;VALUE=DATE:" + k.replace(/-/g, ""), "DTEND;VALUE=DATE:" + ymd(addDays(d, 1)).replace(/-/g, ""),
+      "SUMMARY:" + icsEsc(`🗑 ${names}${cs.some(c => mv.includes(c)) ? "（振替）" : ""}`),
+      "DESCRIPTION:" + icsEsc(`${cut}までに決められた場所へ出してください。\n` + cs.map(c => `・${LONG[c]}：${BAG[c]}`).join("\n")
+        + `\n\n${a.n}（${areaSub(a)}）\nごみ出しカレンダー（非公式）で作りました。最新の情報は市のカレンダーやホームページで確かめてください。`),
+      "TRANSP:TRANSPARENT");
+    [notify.eve, notify.morn].forEach(t => {
+      if (t == null) return;
+      L.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + icsEsc(`${t < 0 ? "あした" : "きょう"}は${names}の日`), "TRIGGER:" + icsDur(t), "END:VALARM");
+    });
+    L.push("END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  return L.map(icsFold).join("\r\n") + "\r\n";
+}
+const icsName = () => `ごみ出し_${calState.area.n.replace(/[\\/:*?"<>|\s]/g, "")}.ics`;
+const canShareFile = (() => { try { return !!(navigator.canShare && navigator.canShare({files:[new File(["x"], "a.ics", {type:"text/calendar"})]})); } catch(e){ return false; } })();
+async function makeIcs(share){
+  const evs = icsEvents();
+  if (!evs.length) return;
+  const text = icsText(evs), name = icsName();
+  if (share){
+    try { await navigator.share({files:[new File([text], name, {type:"text/calendar"})], title:"ごみ出しカレンダー"}); }
+    catch(e){ return; }
+  } else {
+    const url = URL.createObjectURL(new Blob([text], {type:"text/calendar;charset=utf-8"}));
+    const link = document.createElement("a");
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+  notify.saved[areaKey(calState.area)] = `${md(now())}・${evs.length}日分`;
+  saveNotify();
+  const done = $("#nfDone");
+  if (done) done.innerHTML = `<b>ファイルを作りました。</b>下の「登録のしかた」の順に、カレンダーに追加してください。`;
+  renderCal();
+}
+function notifyStatus(){
+  const s = calState.area && notify.saved[areaKey(calState.area)];
+  return s ? `カレンダーに登録するファイルを作りました（${s}）` : "スマホのカレンダーに入れて、前の日の夜などに知らせます";
+}
+function updateNfCount(){
+  const el = $("#nfCount");
+  if (!el) return;
+  const evs = icsEvents(), none = notify.eve == null && notify.morn == null;
+  el.textContent = evs.length
+    ? `${md(new Date(evs[0].k.replace(/-/g, "/")))}〜${md(new Date(evs[evs.length-1].k.replace(/-/g, "/")))} の ${evs.length}日分が入ります${none ? "（時刻が「知らせない」なので、通知は出ません）" : ""}`
+    : "入る収集日がありません。知らせるごみをえらんでください。";
+  document.querySelectorAll("[data-ics],[data-ics-share]").forEach(b => b.disabled = !evs.length);
+}
+function openNotify(){
+  const a = calState.area;
+  if (!a || !CAL) return;
+  const off = offOf(a.c), cats = CAL_ORDER.filter(c => sched().rules[c]);
+  const opt = (list, v) => `<option value="">知らせない</option>` + list.map(([m, t]) => `<option value="${m}"${m === v ? " selected" : ""}>${t}</option>`).join("");
+  const saved = notify.saved[areaKey(a)];
+  const sh = $("#sheet");
+  sh.innerHTML = `<div class="grab"></div>
+    <div class="sh-top"><h2 id="shTitle">通知の設定</h2><button class="x" data-close aria-label="閉じる">✕</button></div>
+    <div class="sec nf">
+      <h3>スマホのカレンダーで知らせる</h3>
+      <p>収集日を、通知つきでスマホのカレンダー（iPhone の「カレンダー」や Google カレンダーなど）に入れます。アプリを閉じていても、電波がなくても、スマホが知らせます。</p>
+      <p class="small">地区：<b>${esc(a.n)}</b>（${esc(areaSub(a))}）${calState.areas.length > 1 ? "<br>ほかの地区の分は、カレンダーの画面で地区を切り替えてから作ってください。" : ""}</p>
+      <h3>知らせるごみ</h3>
+      <div class="opts">${cats.map(c => `<label class="opt"><input type="checkbox" data-nf="cat" value="${esc(c)}"${off.includes(c) ? "" : " checked"}><i style="--cc:${cssVar(c)}"></i>${esc(LONG[c])}</label>`).join("")}</div>
+      <h3>知らせる時刻</h3>
+      <div class="times">
+        <label>前の日<select data-nf="eve">${opt(EVE_TIMES, notify.eve)}</select></label>
+        <label>当日の朝<select data-nf="morn">${opt(MORN_TIMES, notify.morn)}</select></label>
+      </div>
+      <p class="count" id="nfCount"></p>
+      <button class="btn" data-ics style="width:100%;margin:10px 0 0">カレンダーに登録するファイルを作る</button>
+      ${canShareFile ? `<button class="btn sub" data-ics-share style="width:100%;margin:8px 0 0">共有メニューから開く</button>` : ""}
+      <p class="done" id="nfDone">${saved ? `前にファイルを作った日：${esc(saved)}` : ""}</p>
+      <details><summary>iPhone での登録のしかた</summary><ol>
+        <li>上の「カレンダーに登録するファイルを作る」をタップします。</li>
+        <li>カレンダーの画面が出たら「すべてを追加」をタップします。「ダウンロード」と聞かれたときは、ダウンロードしてから、ダウンロードの印（または「ファイル」アプリ）でファイルを開きます。</li>
+        <li>追加先は「新規カレンダー」で「ごみ出し」という名前にしておくと、あとで消すのがかんたんです。</li>
+        <li>うまく開かないときは、ホーム画面のアプリではなく、Safari でこのページを開いて、もう一度ためしてください。</li>
+        <li>鳴らないときは、iPhone の「設定」→「通知」→「カレンダー」で、通知をオンにしてください。</li>
+      </ol></details>
+      <details><summary>Android での登録のしかた</summary><ol>
+        <li>上の「カレンダーに登録するファイルを作る」をタップして、ファイルを保存します。</li>
+        <li>保存したファイルを開き、スマホのカレンダーアプリ（Galaxy の「カレンダー」など）で追加します。</li>
+        <li>Google カレンダーは、スマホのアプリではファイルを読みこめません。パソコンのブラウザで Google カレンダーを開いて、次の順にします。
+          <br>① 左の「他のカレンダー」の＋ →「新しいカレンダーを作成」で「ごみ出し」を作る
+          <br>② 「ごみ出し」の設定で、「終日の予定の通知」を「1日前 19:00」などにする（Google カレンダーは、ファイルに入っている通知の時刻を使わないため）
+          <br>③ 設定の「インポート / エクスポート」で、このファイルと「ごみ出し」カレンダーをえらんで「インポート」</li>
+      </ol></details>
+      <p class="small" style="margin-top:10px">カレンダーに入るのは ${CAL.year + 1}年3月31日（${nendo(CAL)}の終わり）までです。毎年4月に新しい収集日が入ったら、前の「ごみ出し」カレンダーを消してから、もう一度登録してください。ごみの種類や時刻を変えたときも同じです。</p>
+      <h3>アプリを開いたとき</h3>
+      <label class="row"><input type="checkbox" data-nf="remind"${notify.remind ? " checked" : ""}><span>「あしたは○○の日です」をいちばん上に出す<small>上の「知らせるごみ」でえらんだものだけ出します。</small></span></label>
+      <label class="row${canBadge ? "" : " off"}"><input type="checkbox" data-nf="badge"${notify.badge && canBadge ? " checked" : ""}${canBadge ? "" : " disabled"}><span>ホーム画面のアイコンに数字の印を付ける
+        <small>${canBadge ? "きょう（出す時刻の前）か、あしたに出すごみの数を出します。印はアプリを開いたときに変わります（閉じている間は変わりません）。"
+          + (isIOS ? "iPhone は、ホーム画面に追加したアプリで「通知を許可」すると使えます。" : "")
+          : "このスマホ（ブラウザ）では使えません。iPhone は、ホーム画面に追加したアプリで使えます。Android のスマホは、ほとんど対応していません。"}</small></span></label>
+      <p class="small" id="nfBadgeMsg" style="margin:0"></p>
+    </div>`;
+  updateNfCount();
+  $("#scrim").classList.add("open"); sh.classList.add("open");
+  sh.scrollTop = 0;
+}
+async function onNfChange(el){
+  const a = calState.area, k = el.dataset.nf;
+  if (!a) return;
+  if (k === "cat"){
+    const off = new Set(offOf(a.c));
+    el.checked ? off.delete(el.value) : off.add(el.value);
+    notify.off[a.c] = [...off];
+  } else if (k === "eve" || k === "morn") notify[k] = el.value === "" ? null : +el.value;
+  else if (k === "remind") notify.remind = el.checked;
+  else if (k === "badge") notify.badge = el.checked;
+  saveNotify(); updateNfCount(); renderCal();
+  if (k === "badge" && el.checked && isIOS && "Notification" in window){
+    // iPhone は、通知を許可しないとアイコンの印が出ない
+    if (Notification.permission === "default"){ try { await Notification.requestPermission(); } catch(e){} }
+    const msg = $("#nfBadgeMsg");
+    if (msg) msg.textContent = Notification.permission === "denied" ? "通知が許可されていないので、印が出ません。iPhone の「設定」→「通知」で、このアプリの通知を許可してください。" : "";
+    updateBadge();
+  }
+}
 
 /* ===== カメラで調べる（スマホの中だけで判定） =====
    画像認識は Google の MobileNet v2（ImageNet の1000種類の物体）を TensorFlow.js で動かす。
@@ -1372,6 +1603,8 @@ document.addEventListener("click", e => {
   const cq = e.target.closest("[data-camq]");
   if (cq){ closeSheet(); state.cat = null; state.q = cq.dataset.camq; $("#q").value = state.q; renderChips(); setTab("search"); render(); return; }
   if (e.target.closest("[data-close]") || e.target === $("#scrim")){ closeSheet(); return; }
+  if (e.target.closest("[data-ics]")){ makeIcs(false); return; }
+  if (e.target.closest("[data-ics-share]")){ makeIcs(true); return; }
   const g = e.target.closest("[data-guide]");
   if (g){ closeSheet(); setTab("guide"); const el = document.getElementById("cat-" + g.dataset.guide); if (el) window.scrollTo({top: el.offsetTop - $("#hdr").offsetHeight - 8}); return; }
   const f = e.target.closest("[data-filter]");
@@ -1382,7 +1615,10 @@ document.addEventListener("click", e => {
   if (j){ const el = document.getElementById("g-" + j.dataset.jump); if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - $("#hdr").offsetHeight - 4, behavior:"smooth"}); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
-document.addEventListener("change", e => { if (e.target.matches("[data-camfile]")) runCamera(e.target.files[0]); });
+document.addEventListener("change", e => {
+  if (e.target.matches("[data-camfile]")) runCamera(e.target.files[0]);
+  if (e.target.matches("[data-nf]")) onNfChange(e.target);
+});
 window.addEventListener("resize", updateHdr);
 
 /* テーマ切替（端末設定 → ライト → ダーク） */
