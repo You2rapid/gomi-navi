@@ -39,8 +39,22 @@ npm run android
 `gomiappV3.1` を写して Android Studio が開きます。
 
 - **スマホで試す**：Android のスマホの「設定」→「デバイス情報」→「ビルド番号」を7回タップして「開発者向けオプション」を出し、「USB デバッグ」をオンにして、USB でパソコンにつなぎます。Android Studio の上の ▶（Run）を押すとスマホに入ります。
-- **スマホがないとき**：Android Studio の「Device Manager」で、パソコンの中のスマホ（エミュレーター）を作って ▶ を押します。
+- **スマホがないとき**：Android Studio の「Device Manager」のパソコンの中のスマホ（エミュレーター）で ▶ を押します。
+  初めてのときは、Android Studio の「Settings」→「Languages & Frameworks」→「Android SDK」→「SDK Tools」で
+  **「Android Emulator hypervisor driver」にチェックを入れて「Apply」**（パソコンの仮想化の機能を使うための部品。インストールの許可を聞かれたら「はい」）。
 - 通知を試すには、地区をえらんでカレンダーの日にちを長押し →「🔔 前の日の夜7時に知らせる」。「通知の設定」で「当日の朝」なども選べます。
+
+### コマンドで作るとき
+
+```
+cd android
+gradlew assembleDebug
+```
+
+`android/app/build/outputs/apk/debug/app-debug.apk` ができます。
+- Android Studio に入っている Java（25）に合わせて、Gradle は 9.1 にしている（`android/gradle/wrapper/gradle-wrapper.properties`）。
+- 通知の部品が Java 21 を使うので、`android/settings.gradle` の foojay の設定で、Gradle が Java 21 を自動で用意する。
+- `android/local.properties`（Android の部品の場所。`sdk.dir=C:/Users/<名前>/AppData/Local/Android/Sdk`）はパソコンごとなので GitHub に上げない。Android Studio で開くと自動でできる。
 
 ## iPhone 版（Mac で）
 

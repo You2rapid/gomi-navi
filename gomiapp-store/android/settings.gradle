@@ -1,3 +1,8 @@
+// 部品（通知など）が Java 21 を使うので、パソコンに無いときは Gradle が自動で用意する（Eclipse Adoptium の Java）
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
