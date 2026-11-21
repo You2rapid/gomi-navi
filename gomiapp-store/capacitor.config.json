@@ -1,0 +1,11 @@
+{
+  "appId": "io.github.you2rapid.gomicalendar",
+  "appName": "ごみ出しカレンダー",
+  "webDir": "www",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_gomi",
+      "iconColor": "#2f8f5b"
+    }
+  }
+}

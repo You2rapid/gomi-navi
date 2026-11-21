@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知の小さなアイコン（Android は白一色で表示する）。アプリのアイコンのごみ箱と同じ形 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="50"
+    android:viewportHeight="50">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,6h34v6h-34z M19,1h12v6h-12z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M11,15H39L36.5,45Q36,49 32,49H18Q14,49 13.5,45Z M18.5,21h3.4v22h-3.4z M28.1,21h3.4v22h-3.4z" />
+</vector>

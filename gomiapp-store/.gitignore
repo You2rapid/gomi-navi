@@ -1,0 +1,17 @@
+# npm install で入るもの・npm run copy で作るもの（GitHub には上げない）
+node_modules/
+www/
+# Android Studio・Xcode が作るもの
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/release/
+ios/App/Pods/
+ios/App/build/
+ios/DerivedData/
+# 署名の鍵（ぜったいに上げない）
+*.jks
+*.keystore
+keystore.properties

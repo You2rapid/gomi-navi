@@ -10,6 +10,8 @@
   icon-maskable-192.png・icon-maskable-512.png Android 用（四角いっぱい。丸や角丸に切り抜かれても欠けないよう、絵を少し小さく）
   apple-touch-icon.png   iPhone 用（180×180。角は iPhone が丸める）
   favicon-32.png         ブラウザのタブ用（小さいので、マス目を省いた絵）
+ストア版（gomiapp-store/assets/。gomiapp-store で npx @capacitor/assets generate を実行すると、iPhone・Android のアイコンになる）:
+  icon-only.png（1024×1024・四角いっぱい）、icon-foreground.png（絵だけ・まわり透明）、icon-background.png（緑だけ）
 
 絵は 120×120 の座標で描いている。色や大きさを変えたいときは、下の数字を直して実行する。
 """
@@ -56,17 +58,17 @@ def art(grid=True):
 
 
 def svg(size, shape, scale=1.0, grid=True):
-    """shape: round（角丸・まわり透明）／square（四角いっぱい）。scale で絵だけを小さくする"""
-    bg = f'<rect width="120" height="120" rx="26" fill="{GREEN}"/>' if shape == "round" else f'<rect width="120" height="120" fill="{GREEN}"/>'
+    """shape: round（角丸・まわり透明）／square（四角いっぱい）／art（絵だけ・まわり透明）／bg（緑だけ）。scale で絵だけを小さくする"""
+    bg = {"round": f'<rect width="120" height="120" rx="26" fill="{GREEN}"/>', "art": ""}.get(shape, f'<rect width="120" height="120" fill="{GREEN}"/>')
     off = 60 * (1 - scale)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 120 120">{bg}'
-            f'<g transform="translate({off:.2f} {off:.2f}) scale({scale})">{art(grid)}</g></svg>')
+    body = "" if shape == "bg" else f'<g transform="translate({off:.2f} {off:.2f}) scale({scale})">{art(grid)}</g>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 120 120">{bg}{body}</svg>'
 
 
 def png(path, size, shape, scale=1.0, grid=True):
     doc = pymupdf.open("svg", svg(size, shape, scale, grid).encode())
     page = doc[0]
-    pix = page.get_pixmap(matrix=pymupdf.Matrix(size / page.rect.width, size / page.rect.height), alpha=(shape == "round"))
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(size / page.rect.width, size / page.rect.height), alpha=shape in ("round", "art"))
     pix.save(path)
 
 
@@ -82,6 +84,15 @@ def main():
     png(OUT / "favicon-32.png", 32, "round", grid=False)
     for f in sorted(OUT.iterdir()):
         print(f.name, f.stat().st_size)
+    # ストア版（gomiapp-store があるときだけ）。Android のアイコンは丸などに切り抜かれるので、絵だけのものは小さめに
+    store = OUT.parents[1] / "gomiapp-store" / "assets"
+    if store.parent.exists():
+        store.mkdir(exist_ok=True)
+        png(store / "icon-only.png", 1024, "square")
+        png(store / "icon-foreground.png", 1024, "art", scale=0.62)
+        png(store / "icon-background.png", 1024, "bg")
+        for f in sorted(store.iterdir()):
+            print("gomiapp-store/assets/" + f.name, f.stat().st_size)
 
 
 if __name__ == "__main__":

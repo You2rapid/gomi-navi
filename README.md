@@ -14,6 +14,7 @@
 | --- | --- |
 | `gomiappV3.0/` | アプリ本体（ごみ出しカレンダー 3.0）。データと作る道具も入っている |
 | `gomiappV3.1/` | 次の版（3.1）。3.0 に通知を足したもの。https://you2rapid.github.io/gomi-navi/gomiappV3.1/ <br>・収集日を通知つきでスマホのカレンダーに入れるファイル（.ics）を作る（前の日の夜・当日の朝、知らせるごみをえらべる）<br>・開いたときに「あしたは○○の日です」を出す、ホーム画面のアイコンに数字の印（対応するスマホだけ） |
+| `gomiapp-store/` | ストア版（iPhone・Android のアプリ）。gomiappV3.1 を Capacitor で包んだもの。作り方は gomiapp-store/README.md |
 | `gomiappV3.0/tools/README.md` | データの置き場所、毎年4月の更新、自治体の増やし方、状況一覧 |
 | `index.html`・`v3/index.html` | 前の場所から新しい場所へ案内するページ |
 | `元データ/` | 市のPDFなどの元の資料（このパソコンだけ。GitHub には上げない） |

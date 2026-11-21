@@ -1,0 +1,22 @@
+{
+  "name": "gomiapp-store",
+  "version": "3.1.0",
+  "private": true,
+  "description": "ごみ出しカレンダーのストア版（iPhone・Android のアプリ）。中身は ../gomiappV3.1 をそのまま使う",
+  "scripts": {
+    "copy": "node scripts/copy-web.mjs",
+    "sync": "node scripts/copy-web.mjs && npx cap sync",
+    "android": "node scripts/copy-web.mjs && npx cap sync android && npx cap open android",
+    "ios": "node scripts/copy-web.mjs && npx cap sync ios && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/local-notifications": "^8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.2"
+  }
+}
