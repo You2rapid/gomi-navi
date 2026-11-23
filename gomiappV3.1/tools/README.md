@@ -25,6 +25,7 @@ gomiappV3.1/
     download_sources.py         毎年4月：市のサイトから新しいカレンダーをダウンロード
     update_opendata.py          オープンデータ（品目・収集地区など）を取ってきて、データを作り直す
     build_geo.py                地図（geo/）を作る
+    build_lgcode.py             全国地方公共団体コードの一覧を作る（総務省の Excel から。元データ/全国/地方公共団体コード/lgcode.json・lgcode.csv。道具用で、アプリでは使わない）
     build_zip.py                全国の郵便番号一覧を県ごとに作る（日本郵便のデータ。元データ/全国/郵便番号/県別/。町名の照合用で、アプリでは使わない）
     status.py                   状況一覧（元データ/状況一覧.html）を作る
     make_icons.py               アプリのアイコン（gomiappV3.1/icons/）を作る（絵を変えたいときは中の数字や色を直して実行）
