@@ -333,9 +333,8 @@ def address_check(m, cal, g, zips, row, note):
         main = f"町 {found:,}/{len(towns):,}"
         parts.append(f"地区が見つからない町 {len(miss)}")
         if miss:
-            if len(miss) > len(towns) * 0.05:
-                lv = WARN
-            note(WARN if lv == WARN else INFO, f"住所：収集日の地区が見つからない町が {len(miss)}（正式な町 {len(towns)} のうち）",
+            # 市の資料に載っていない町はアプリに足さない決まり（tools/AGENT.md）なので、いつも「参考」
+            note(INFO, f"住所：収集日の地区が見つからない町が {len(miss)}（正式な町 {len(towns)} のうち）",
                  "<p>郵便番号一覧にある町（市の正式な町名）のうち、アプリの収集日の地区の一覧にも、「今いる場所から探す」の町→地区の対応にも見つからない町です。"
                  "市の資料で別の名前や別の地区にまとめられているか、アプリに入っていない（市の資料から読み落とした）かもしれません。"
                  "この町に住んでいる人は、町名で探しても見つかりません。</p>"

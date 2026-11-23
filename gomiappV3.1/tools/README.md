@@ -28,6 +28,8 @@ gomiappV3.1/
     build_lgcode.py             全国地方公共団体コードの一覧を作る（総務省の Excel から。元データ/全国/地方公共団体コード/lgcode.json・lgcode.csv。道具用で、アプリでは使わない）
     build_zip.py                全国の郵便番号一覧を県ごとに作る（日本郵便のデータ。元データ/全国/郵便番号/県別/。町名の照合用で、アプリでは使わない）
     status.py                   状況一覧（元データ/状況一覧.html）を作る
+    check_muni.py               自治体のデータが決まった形・ルールどおりか自動で調べる（エージェントが作ったデータの検査。直すことがあると終了コード 1）
+    AGENT.md                    自治体のデータを作る手順書（エージェント用）：決まり・作業の流れ・できあがりの条件・作業報告の形
     make_icons.py               アプリのアイコン（gomiappV3.1/icons/）を作る（絵を変えたいときは中の数字や色を直して実行）
     lib/                        道具みんなで使う部品（自治体の一覧の読み書き・ダウンロード・地図）
     munis/35_yamaguchi/35215_shunan/   自治体ごとの道具
@@ -83,6 +85,9 @@ python gomiappV3.1/tools/update_year.py 2027
 必要なもの：Python と `pip install pymupdf pykakasi`
 
 ## 自治体を増やすとき
+
+**決まり・手順・できあがりの条件は [AGENT.md](AGENT.md)**（エージェントに任せるときも、人が作るときも同じ）。地区・町名は市の資料のとおりにし、市の資料より詳しくしない。
+できたら `python gomiappV3.1/tools/check_muni.py <自治体コード>` で「直す」が0か確かめる。
 
 1. `data/municipalities.js` に1行足す（`code`・`pref`・`name`・`slug`（ローマ字）・`yomi`）。新しい県なら `prefs` にも足す
 2. `data/<県>/<自治体>/city.js` を作る（いまある自治体のものをまねる。項目は下の表）
