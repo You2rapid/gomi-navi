@@ -1,4 +1,4 @@
-"""全国の郵便番号一覧を、県ごとのファイルに分けて作る（郵便番号から自治体と町を探す用）。
+"""全国の郵便番号一覧を、県ごとのファイルに分けて作る（データの照合用：市の資料の町名が正式な町名か確かめる。アプリでは使わない）。
 
 使い方（gomi フォルダで実行）:
   python gomiappV3.1/tools/build_zip.py              ← 元データにある一番新しい郵便番号データから作る
@@ -10,14 +10,15 @@
 日本郵便は郵便番号データの著作権を主張せず、自由に配布してよいとしている（utf-readme.html）。
 
 できるもの:
-  gomiappV3.1/zip/<県コード>_<県>.json … その県の郵便番号の一覧
+  元データ/全国/郵便番号/県別/<県コード>_<県>.json … その県の郵便番号の一覧（このパソコンだけ。GitHub には上げない）
       "cities": {自治体コード: {"n": 市区町村名, "k": 読み}}
       "zips":   {郵便番号7けた: [{"c": 自治体コード, "t": 町域名, "k": 読み, "s": かっこの中（あるときだけ）, "x": 特別な行（あるときだけ）}]}
          1つの郵便番号に町がいくつもあるときは、リストに複数入る。
          同じ町でも丁目や番地で郵便番号が分かれるときは、それぞれの郵便番号に入る（"s" にどの丁目か書いてある）。
          "x" は町を決められない行： "rest"＝その市の「以下に掲載がない場合」、"banchi"＝市の次にすぐ番地がくる、"all"＝市（町・村）全体が1つの番号
            （これらの行は "t" を空にしている）
-  gomiappV3.1/zip/index.json         … 県の一覧（ファイル名・件数）と、郵便番号の上3けた → 県コード（アプリはこれで読む県のファイルを決める）
+  元データ/全国/郵便番号/県別/index.json … 県の一覧（ファイル名・件数）と、郵便番号の上3けた → 県コード
+使っている道具：tools/status.py（状況一覧の「住所」の列）、tools/munis/26_kyoto/26100_kyoto/calendar.py（京都市の町名の照合）
 """
 import csv
 import io
@@ -33,7 +34,7 @@ sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = ROOT / "元データ" / "全国" / "郵便番号"
-OUT_DIR = ROOT / "gomiappV3.1" / "zip"
+OUT_DIR = ROOT / "元データ" / "全国" / "郵便番号" / "県別"
 URL = "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip"
 SOURCE = "日本郵便 郵便番号データ（住所の郵便番号 1レコード1行 UTF-8形式）を加工"
 

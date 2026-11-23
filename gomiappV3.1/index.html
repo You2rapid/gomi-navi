@@ -297,11 +297,6 @@ footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
 .geo-res .geo-hd{font-size:15px}
 .geo-res .area-list{box-shadow:none;border:1px solid var(--line);margin:0 0 8px;max-height:none}
 .geo-mark{color:var(--accent)!important;border-color:var(--accent)!important}
-/* 郵便番号から探す（3.1） */
-.zip-row{display:flex;gap:8px;align-items:center;margin:0 0 10px}
-.zip-row input{flex:1;min-width:0;margin:0!important}
-.zip-row .btn-sub{padding:10px 16px;font-size:14.5px}
-.geo-res .zip-sub{font-size:12px!important;color:var(--muted)!important}
 /* 通知（3.1）：開いたときのお知らせ・通知の設定 */
 .remind{display:flex;gap:10px;align-items:flex-start;background:color-mix(in srgb,var(--accent) 11%,var(--surface));border:1.5px solid color-mix(in srgb,var(--accent) 50%,transparent);border-radius:14px;padding:10px 14px;margin:0 0 12px}
 .remind .ic{flex:none;font-size:18px;line-height:1.5}
@@ -388,8 +383,7 @@ footer{font-size:12px;color:var(--muted);padding:8px 0 30px;text-align:center}
   <footer>
     <div id="cityFoot"></div>
     カメラでの判定は Google の MobileNet と TensorFlow.js（Apache License 2.0）をスマホの中で動かしています。写真は外に送りません。<br>
-    「今いる場所から探す」は、政府統計の総合窓口（e-Stat）の国勢調査（令和2年）町丁・字等別境界データを加工して使っています。位置情報は外に送りません。<br>
-    「郵便番号から探す」は、日本郵便の郵便番号データを加工して使っています。郵便番号は外に送りません。
+    「今いる場所から探す」は、政府統計の総合窓口（e-Stat）の国勢調査（令和2年）町丁・字等別境界データを加工して使っています。位置情報は外に送りません。
   </footer>
 </div>
 
@@ -950,8 +944,6 @@ function renderPicker(){
     <button class="btn-sub geo-btn" data-geo>📍 今いる場所から探す</button>
     <p class="small geo-note">位置情報はこのスマホの中だけで使い、外には送りません。</p>
     <div id="geoBox">${geoBoxHtml()}</div>
-    <div class="zip-row"><input id="zipQ" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="8" placeholder="〒 郵便番号（7けた）で探す" value="${esc(calState.zipQ || "")}" aria-label="郵便番号"><button class="btn-sub" data-zip>探す</button></div>
-    <div id="zipBox">${zipBoxHtml()}</div>
     ${MUNI_REG.prefs.length > 1 ? `<span class="step">都道府県</span>
     <div class="seg">${MUNI_REG.prefs.map(p => `<button data-pref="${p.code}" aria-pressed="${MUNI[calState.city].pref === p.code}">${esc(p.name)}</button>`).join("")}</div>` : ""}
     <span class="step">市町村</span>
@@ -968,12 +960,6 @@ function renderPicker(){
   renderAreaList();
   const q = $("#areaQ");
   if (q) q.addEventListener("input", e => { calState.q = e.target.value; renderAreaList(); });
-  const zq = $("#zipQ");
-  zq.addEventListener("input", e => {
-    calState.zipQ = e.target.value;
-    if (zipDigits(e.target.value).length === 7) findByZip(e.target.value);
-  });
-  zq.addEventListener("keydown", e => { if (e.key === "Enter") findByZip(e.target.value); });
 }
 function renderAreaList(){
   const cy = CITIES[calState.city], qn = normChar(calState.q);
@@ -1132,105 +1118,6 @@ function geoBoxHtml(){
 }
 function renderGeoBox(){ const b = $("#geoBox"); if (b) b.innerHTML = geoBoxHtml(); }
 
-/* ===== 郵便番号から探す（3.1） =====
-   日本郵便の郵便番号データ（zip/<県>.json：tools/build_zip.py で作る）で、郵便番号から市区町村と町名を出し、地区の候補を出す。
-   町名がそのまま地区の名前になっている市（京都市・周南市）は名前で探す。
-   地区が町より大きい市（下松市・光市）は、「今いる場所から探す」の町→地区の対応（geo/<県>.json の towns[].c）で探す。
-   読むのは、上3けたで決まる県のファイルだけ。郵便番号は外に送らない。 */
-const zipData = {index:null, files:{}};
-const zipDigits = v => normChar(v).replace(/[^0-9]/g, "");
-async function loadZip(z7){
-  if (!zipData.index) zipData.index = await fetchJson("zip/index.json");
-  const out = [];
-  for (const pc of zipData.index.head3[z7.slice(0, 3)] || []){
-    const p = zipData.index.prefs.find(x => x.code === pc);
-    if (!p) continue;
-    if (!zipData.files[pc]) zipData.files[pc] = await fetchJson("zip/" + p.file);
-    out.push(zipData.files[pc]);
-  }
-  return out;
-}
-// 県の地図（geo/<県>.json）を、県コードで読む
-async function loadGeoPref(pc){
-  if (!geo.index) geo.index = await fetchJson("geo/index.json");
-  const p = geo.index.prefs.find(x => x.code === pc);
-  if (!p || geo.files[p.file]) return;
-  const d = await fetchJson("geo/" + p.file);
-  prepGeo(d); geo.files[p.file] = d; Object.assign(geo.cities, d.cities);
-}
-// 町名をくらべる形：「大字」と（通りの側など）を取り、ヶ・ケ、之・ノ などをそろえる
-const CHOME = /[0-9一二三四五六七八九十]+丁目$/;
-const townKey = s => normChar(s.replace(/^大字/, "").replace(/（\d+）$/, "").replace(/（[^）]*）$/, "")).replace(/[ゖヶ]/g, "け").replace(/之/g, "の");
-// 地区の名前が郵便番号の町名と同じか（郵便番号の町名には丁目が付かないので、「〇〇町二丁目」も「〇〇町」とみなす）
-const sameTown = (areaName, t) => { const a = townKey(areaName), b = townKey(t); return a === b || a.replace(CHOME, "") === b; };
-// 地図の町名（e-Stat）と郵便番号の町名。京都市の e-Stat の町名は「学区＋町名」なので、終わりが合えばよい
-const geoTown = (n, t) => { const a = townKey(n).replace(CHOME, ""), b = townKey(t); return a === b || (b.length >= 3 && a.endsWith(b)); };
-// 郵便番号の市区町村コード → このアプリの自治体（政令市の区は市のコード 〇〇〇00）
-const muniOf = c => MUNI[c] ? c : MUNI[c.slice(0, 3) + "00"] ? c.slice(0, 3) + "00" : null;
-async function findByZip(raw){
-  const z7 = zipDigits(raw);
-  calState.zipQ = raw;
-  if (z7.length !== 7){ calState.zip = {st:"err", msg:"郵便番号は7けたの数字で入れてください（例：745-0005）。"}; renderZipBox(); return; }
-  if (calState.zip && calState.zip.z === z7 && calState.zip.st !== "err") return;
-  calState.zip = {st:"wait", z:z7}; renderZipBox();
-  try {
-    const files = await loadZip(z7);
-    const ents = [];
-    for (const f of files) for (const e of f.zips[z7] || []) ents.push({...e, cityName:f.cities[e.c].n, prefName:f.name, pref:f.pref});
-    if (!ents.length){ calState.zip = {st:"err", z:z7, msg:`〒${z7.slice(0, 3)}-${z7.slice(3)} は見つかりませんでした。番号を確かめてください。`}; renderPicker(); return; }
-    const first = ents.find(e => muniOf(e.c));
-    if (!first){ calState.zip = {st:"out", z:z7, place:[...new Set(ents.map(e => e.prefName + e.cityName))].join("・")}; renderPicker(); return; }
-    const id = muniOf(first.c);
-    await loadCity(id);
-    const cy = CITIES[id], areas = cy.cal.areas, items = [];
-    for (const e of ents.filter(e => muniOf(e.c) === id)){
-      // 政令市の区（京都市北区など）は、アプリの「地域」
-      const ward = e.c !== id ? e.cityName.replace(MUNI[id].name, "") : "";
-      const reg = cy.regions.includes(ward) ? ward : "";
-      let c = [];
-      if (e.t){
-        c = areas.map((a, i) => i).filter(i => (!reg || areas[i].r === reg) && sameTown(areas[i].n, e.t));
-        if (!c.length){
-          await loadGeoPref(e.pref).catch(() => {});
-          const gc = geo.cities[id];
-          if (gc) for (const t of gc.towns) if (geoTown(t.n, e.t)) c.push(...t.c.filter(i => !reg || areas[i].r === reg));
-          c = [...new Set(c)];
-        }
-      }
-      // 同じ町が番地などで何行にも分かれているときは1つにまとめる
-      const same = items.find(it => it.name === e.t && it.cityName === e.cityName && it.x === (e.x || ""));
-      if (same){
-        if (e.s && !same.sub.includes(e.s)) same.sub += (same.sub ? "、" : "") + e.s;
-        same.cands = [...new Set([...same.cands, ...c])];
-      } else items.push({name:e.t, sub:e.s || "", x:e.x || "", cityName:e.cityName, region:reg, cands:c});
-    }
-    calState.zip = {st:"ok", z:z7, city:id, items};
-    calState.city = id; calState.q = "";
-    calState.region = (items.find(it => it.region) || {}).region || cy.regions[0] || "";
-    if (!calState.area) useCity(id);
-  } catch(e){
-    calState.zip = {st:"err", z:z7, msg:"郵便番号のデータを読み込めませんでした。電波のよい所で、もう一度お試しください。"};
-  }
-  renderPicker();
-}
-function zipBoxHtml(){
-  const g = calState.zip;
-  if (!g) return "";
-  const zz = g.z ? `〒${g.z.slice(0, 3)}-${g.z.slice(3)}` : "";
-  if (g.st === "wait") return `<p class="geo-wait"><span class="spin"></span>郵便番号を調べています…</p>`;
-  if (g.st === "err") return `<div class="note-box geo-res">${esc(g.msg)}</div>`;
-  if (g.st === "out") return `<div class="note-box geo-res">${esc(zz)} は${esc(g.place)}の郵便番号です。${esc(g.place)}は、まだこのアプリに入っていません。</div>`;
-  const cy = CITIES[g.city], areas = cy.cal.areas;
-  const row = i => `<li><button data-area="${i}"><span class="nm2">${esc(areas[i].n)}${areas[i].d ? `<span class="desc">${esc(areas[i].d)}</span>` : ""}</span>${(cy.schedLabel(areas[i].s) || areas[i].n) !== areas[i].n ? `<span class="s">${esc(cy.schedLabel(areas[i].s))}</span>` : ""}</button></li>`;
-  const cut = s => s.length > 60 ? s.slice(0, 60) + "…" : s;
-  return `<div class="geo-res">` + g.items.map(it => `<p class="geo-hd"><b>${esc(zz)}</b>　${esc(it.cityName)}${it.name ? ` <b>${esc(it.name)}</b>` : ""}</p>`
-    + (it.sub ? `<p class="zip-sub">（${esc(cut(it.sub))}）</p>` : "")
-    + (it.cands.length ? `<p>当てはまる地区をタップしてください。</p><ul class="area-list">${it.cands.slice(0, 40).map(row).join("")}</ul>`
-      : `<p>${it.x ? "この郵便番号だけでは町が決まりません。" : "この町の地区が見つかりませんでした。"}下の一覧${it.region ? `（${esc(it.region)}）` : ""}から探してください。</p>`)).join("")
-    + `</div>`;
-}
-function renderZipBox(){ const b = $("#zipBox"); if (b) b.innerHTML = zipBoxHtml(); }
-
 // 地区をえらんだとき：登録済みならそこへ切り替え、なければ追加して表示
 function setArea(a){
   const item = {c:calState.city, r:a.r || "", n:a.n, s:a.s};
@@ -1243,7 +1130,7 @@ function setArea(a){
 }
 function switchArea(i){
   calState.cur = i; saveAreas();
-  calState.picking = false; calState.q = ""; calState.city = calState.area.c; calState.month = null; calState.geo = null; calState.zip = null; calState.zipQ = "";
+  calState.picking = false; calState.q = ""; calState.city = calState.area.c; calState.month = null; calState.geo = null;
   renderCal(); render(); window.scrollTo({top:0});
 }
 function removeArea(i){
@@ -1313,9 +1200,8 @@ $("#view-cal").addEventListener("click", e => {
   if (ct){ pickCity(ct.dataset.city); return; }
   const pf = e.target.closest("[data-pref]");
   if (pf){ pickCity(MUNIS.find(m => m.pref === pf.dataset.pref).code); return; }
-  if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; calState.geo = null; calState.zip = null; calState.zipQ = ""; renderCal(); window.scrollTo({top:0}); return; }
+  if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; calState.geo = null; renderCal(); window.scrollTo({top:0}); return; }
   if (e.target.closest("[data-geo]")){ findByGps(); return; }
-  if (e.target.closest("[data-zip]")){ findByZip(($("#zipQ") || {}).value || ""); return; }
   if (e.target.closest("[data-notify]")){ openNotify(); return; }
   const sw = e.target.closest("[data-switch]");
   if (sw){ switchArea(+sw.dataset.switch); return; }

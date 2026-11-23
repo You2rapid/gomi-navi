@@ -9,12 +9,15 @@
   収集日（何年度か・地区の数・祝日のデータと年度が合っているか）、品目（件数・区分の書きまちがい）、
   設定（区分・色）、今いる場所から探す（町の数・地区が決まらない町の数）、
   元データ（今の年度と次の年度のファイルがそろっているか・分別の冊子・地図）、道具（calendar.py・geo.py・README）、
-  商用利用（license.json：使っている資料の利用条件・許可が必要か・確かめた日）と、オープンデータを使っているか・古くなっていないか
+  商用利用（license.json：使っている資料の利用条件・許可が必要か・確かめた日）と、オープンデータを使っているか・古くなっていないか、
+  住所（郵便番号一覧の正式な町名とくらべて、収集日の地区が見つからない町・収集日の町名が正式な町名に無いもの・PDF の読み取りで気になったところ）
 """
 import datetime as dt
 import html
 import json
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
@@ -22,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import munis as M  # noqa: E402
 
 OK, WARN, BAD = "ok", "warn", "bad"
+INFO = "info"   # 知っておくこと（数えない）
 
 
 def fiscal_year(d):
@@ -32,7 +36,7 @@ def reiwa(y):
     return f"令和{y - 2018}年度"
 
 
-def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
+def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None, zips=None):
     """1つの自治体を調べて、(列ごとの [状態, 表示, くわしく]) と、気をつけることの一覧を返す"""
     notes, row = [], {}
     today = today or dt.date.today()
@@ -115,7 +119,19 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
         if no_read:
             note(WARN, f"読み（ひらがな）のない品目が {no_read} 件あります（ひらがなで探せません）")
         dup = len(names) - len(set(names))
-        row["items"] = (lv, f"{len(items):,} 件", f"同じ名前 {dup} 件" if dup else "")
+        mk = m.module("make_items")
+        bk = getattr(mk, "BOOKLET", None) if mk else None
+        src = ""
+        if bk and Path(bk).exists():
+            nb = sum(1 for x in Path(bk).read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#"))
+            src = f"冊子（{getattr(mk, 'BOOKLET_DATE', '')}）{nb}件＋ほか {max(len(items) - nb, 0)}件"
+            bdate = getattr(mk, "BOOKLET_DATE", "")
+            if bdate and (today - dt.date.fromisoformat(bdate + "-01")).days > 400:
+                note(WARN, f"品目の元にした冊子「{getattr(mk, 'BOOKLET_TITLE', '')}」（{bdate}）から1年以上たっています",
+                     steps("市のホームページで、新しい冊子（毎年3月ごろ）が出ていないか見る",
+                           f"出ていたら元データに保存して、<code>gomiappV3.1/tools/munis/{h(m.path)}/{h(Path(bk).name)}</code> を新しい冊子と見くらべて直す（Claude に頼む）",
+                           f"<code>python gomiappV3.1/tools/munis/{h(m.path)}/make_items.py</code> で作り直す"))
+        row["items"] = (lv, f"{len(items):,} 件", "・".join(x for x in [src, f"同じ名前 {dup} 件" if dup else ""] if x))
     except Exception as e:
         row["items"] = (BAD, "読めません", str(e))
         note(BAD, f"items.js が読めません：{e}")
@@ -138,6 +154,13 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
                      steps(f"<code>gomiappV3.1/tools/munis/{h(m.path)}/geo.py</code> の町名と地区の対応表を見直す",
                            f"<code>python gomiappV3.1/tools/build_geo.py {m.pref}</code> で作り直す"))
 
+    # ---- 住所（郵便番号・PDF の読み取り）----
+    address_check(m, cal, g, zips, row, note)
+    # 住所の列から飛べるように、住所の最初の注意に印（addr-<コード>）を付ける
+    i = next((i for i, n in enumerate(notes) if n[1].startswith("住所：") and not n[3]), None)
+    if i is not None:
+        notes[i] = notes[i][:3] + (f"addr-{m.code}",)
+
     # ---- 元データ ----
     mod = m.module("calendar")
     need = getattr(mod, "NEED", []) if mod else []
@@ -149,6 +172,13 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     next_y = cal_y + 1
     cur_ok, next_ok = complete(cal_y), complete(next_y)
     books = sorted(p.name for p in (m.src_dir / "分別の冊子").glob("*")) if (m.src_dir / "分別の冊子").exists() else []
+    mk = m.module("make_items")
+    if mk and getattr(mk, "BOOKLET_PDF", None):   # 冊子を年度のフォルダなどに置いているとき（京都市）
+        if (m.src_dir / mk.BOOKLET_PDF).exists():
+            books.append(Path(mk.BOOKLET_PDF).name)
+        else:
+            note(WARN, f"品目の元にした冊子が元データにありません（{mk.BOOKLET_PDF}）",
+                 f"<p>市のサイトから冊子（PDF）を保存して、<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/{h(mk.BOOKLET_PDF)}</code> に置きます。</p>")
     kml = (m.src_dir / "地図" / f"r2ka{m.code}.kml").exists() or any((m.src_dir / "地図").glob("r2ka*.kml"))   # 区のある市は区ごとの地図
     lv = OK if cur_ok and books and kml else WARN
     if not cur_ok:
@@ -237,6 +267,126 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
 
 
 h = html.escape   # HTML の文字にする（e は例外の名前に使っているので h）
+
+
+# ---------------- 住所（郵便番号一覧の町名＝市の正式な町名との照合。元データ/全国/郵便番号/県別/、tools/build_zip.py で作る） ----------------
+_CHOME = re.compile(r"[0-9一二三四五六七八九十]+丁目([~〜～][0-9一二三四五六七八九十]+丁目)?$")
+TOWN_VAR = str.maketrans({"薮": "藪", "菴": "庵", "峯": "峰", "龍": "竜", "斉": "斎", "槇": "槙", "桧": "檜", "曽": "曾",
+                          "渕": "淵", "圓": "円", "阪": "坂", "篭": "籠", "檀": "壇"})
+
+
+def tkey(x):
+    """町名をくらべる形：大字・（1）・（通りの側など）・全域を取り、カタカナをひらがなに、
+    ヶ→け、之→の、異体字（薮→藪 など）、通り→通"""
+    x = re.sub(r"全域$", "", re.sub(r"（[^）]*）$", "", re.sub(r"（\d+）$", "", re.sub(r"^大字", "", x))))
+    out = ""
+    for c in unicodedata.normalize("NFKC", x).lower():
+        if "\u30a1" <= c <= "\u30f6":
+            c = chr(ord(c) - 0x60)
+        if re.match(r"[\s・･、,。]", c):
+            continue
+        out += c
+    return out.replace("ゖ", "け").replace("ヶ", "け").replace("之", "の").translate(TOWN_VAR).replace("通り", "通")
+
+
+def same_town(area, t):
+    a, b = tkey(area), tkey(t)
+    return a == b or _CHOME.sub("", a) == b
+
+
+def geo_town(n, t):
+    a, b = _CHOME.sub("", tkey(n)), tkey(t)
+    return a == b or (len(b) >= 3 and a.endswith(b))
+
+
+def names_html(xs, limit=80):
+    more = f"<br>…ほか {len(xs) - limit}" if len(xs) > limit else ""
+    return "<p>" + "、".join(h(x) for x in xs[:limit]) + more + "</p>"
+
+
+def address_check(m, cal, g, zips, row, note):
+    """住所の列：正式な町（郵便番号一覧）で収集日の地区が見つからない町、収集日の町名が正式な町名に無いもの、PDF の読み取りで気になったところ"""
+    if not cal:
+        return
+    areas = cal["areas"]
+    z = (zips or {}).get(m.pref)
+    lv, parts, main = OK, [], "照合なし（郵便番号一覧がない）"
+    if z:
+        # この自治体の郵便番号の町（政令市は区ごと。区はアプリの「地域」）
+        towns = {}
+        for v in z["zips"].values():
+            for e in v:
+                c = e["c"]
+                if e.get("t") and (c == m.code or (c[:3] + "00" == m.code and c != m.code)):
+                    ward = z["cities"][c]["n"].replace(m.name, "") if c != m.code else ""
+                    towns.setdefault((ward, e["t"]), None)
+        regions = {a.get("r", "") for a in areas}
+        miss = []
+        for ward, t in towns:
+            reg = ward if ward in regions else ""
+            ok = any((not reg or a.get("r") == reg) and same_town(a["n"], t) for a in areas)
+            if not ok and g and "towns" in g:
+                ok = any(geo_town(gt["n"], t) and any(not reg or areas[i].get("r") == reg for i in gt.get("c", [])) for gt in g["towns"])
+            if not ok:
+                miss.append((ward + " " if ward else "") + t)
+        found = len(towns) - len(miss)
+        main = f"町 {found:,}/{len(towns):,}"
+        parts.append(f"地区が見つからない町 {len(miss)}")
+        if miss:
+            if len(miss) > len(towns) * 0.05:
+                lv = WARN
+            note(WARN if lv == WARN else INFO, f"住所：収集日の地区が見つからない町が {len(miss)}（正式な町 {len(towns)} のうち）",
+                 "<p>郵便番号一覧にある町（市の正式な町名）のうち、アプリの収集日の地区の一覧にも、「今いる場所から探す」の町→地区の対応にも見つからない町です。"
+                 "市の資料で別の名前や別の地区にまとめられているか、アプリに入っていない（市の資料から読み落とした）かもしれません。"
+                 "この町に住んでいる人は、町名で探しても見つかりません。</p>"
+                 + names_html(sorted(miss))
+                 + steps("市の収集日の資料（カレンダー・地区の一覧）で、この町を探す",
+                         "地区の名前が町名の市（京都市・周南市など）：資料にあれば、町名の書き方がちがうか、読み落としなので calendar.py を直す（Claude に頼む）",
+                         f"地区が町より大きい市（下松市・光市など）：<code>gomiappV3.1/tools/munis/{h(m.path)}/geo.py</code> の町→地区の対応に、この町を足す",
+                         "工場・港・山の中など、人の住んでいない所なら、そのままでよい"))
+        # 収集日の町名が郵便番号の町名にあるか（地区の名前が町名の自治体だけ）
+        pt = {}
+        for ward, t in towns:
+            pt.setdefault(ward, set()).add(_CHOME.sub("", tkey(t)))
+        def in_post(a):
+            k = _CHOME.sub("", tkey(a["n"]))
+            return k in pt.get(a.get("r", ""), set()) or k in pt.get("", set())
+        bases = {}
+        for a in areas:
+            if not a.get("d", "").startswith("右京区京北"):
+                bases.setdefault((a.get("r", ""), re.sub(r"（[^）]*）$", "", re.sub(r"（\d）$", "", a["n"]))), a)
+        hit = [k for k, a in bases.items() if in_post(a)]
+        if bases and len(hit) >= len(bases) * 0.5:
+            nm = sorted(f"{r} {n}".strip() for (r, n), a in bases.items() if not in_post(a))
+            parts.append(f"正式な町名に無い {len(nm)}")
+            if nm:
+                note(INFO, f"住所：収集日の町名のうち、正式な町名（郵便番号一覧）に見つからないものが {len(nm)}",
+                     "<p>山の中の字や、郵便番号のない地名が多いです。市の一覧表の書きまちがい・異体字のこともあります"
+                     "（そのときは、正式な町名で検索しても見つかりません）。</p>" + names_html(nm)
+                     + steps(f"書きまちがいなら <code>gomiappV3.1/tools/munis/{h(m.path)}/calendar.py</code> で直す（京都市は PAIRS に字の組を足す）",
+                             f"<code>python gomiappV3.1/tools/update_year.py {cal['year']} {m.code}</code> で作り直す"))
+        else:
+            parts.append("地区名（町名と照合しない）")
+    # PDF の読み取りで気になったところ（読み取りの注意.txt を書く自治体）
+    rf = m.year_dir(cal["year"]) / "読み取りの注意.txt"
+    if rf.exists():
+        lines = [x for x in rf.read_text(encoding="utf-8").splitlines()[3:] if x.strip()]
+        unread = [x for x in lines if "読めない行" in x]
+        guess = [x for x in lines if "頭を" in x or "頭が決まらない" in x]
+        dupn = [x for x in lines if "同じ名前" in x]
+        fixed = [x for x in lines if "書き方に直した" in x]
+        parts.append(f"読めない行 {len(unread)}・頭の推測 {len(guess)}・同名 {len(dupn)}・直した町名 {len(fixed)}")
+        if unread:
+            lv = BAD
+            note(BAD, f"住所：市の PDF に読めない行が {len(unread)} あります（その町はアプリに入っていません）",
+                 names_html(unread) + steps(f"<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/{cal['year']}年度/読み取りの注意.txt</code> と PDF を見くらべる",
+                                            "calendar.py の読み取りを直す（Claude に頼む）"))
+        if guess or dupn:
+            lv = max(lv, WARN, key=[OK, WARN, BAD].index)
+            note(WARN, f"住所：町名の頭を推測したもの {len(guess)}・同じ名前で収集日がちがう町 {len(dupn)}",
+                 names_html(guess + dupn) + steps("市の PDF と見くらべて、合っているか確かめる",
+                                                  "まちがっていたら calendar.py の PREFIX_FIX に手で書く"))
+    row["addr"] = (lv, main, "・".join(parts))
 
 
 def steps(*items):
@@ -368,7 +518,7 @@ td.name b{display:block} td.name small{color:var(--muted)}
 ul.notes{margin:0;padding:0;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:12px}
 ul.notes li{padding:8px 12px;border-bottom:1px solid var(--line)} ul.notes li:last-child{border-bottom:0}
 .tag{display:inline-block;font-size:12px;font-weight:700;padding:0 6px;border-radius:4px;margin-right:6px}
-.tag.warn{background:var(--warn-bg);color:var(--warn)} .tag.bad{background:var(--bad-bg);color:var(--bad)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)} .tag.bad{background:var(--bad-bg);color:var(--bad)} .tag.info{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .howto{color:var(--muted);font-size:13px} code{font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px}
 ul.notes details summary{cursor:pointer;list-style:none}
 ul.notes details summary::-webkit-details-marker{display:none}
@@ -393,7 +543,7 @@ function openHash(){ const el = location.hash && document.getElementById(locatio
 window.addEventListener("hashchange", openHash); openHash();
 """
 
-COLS = [("cal", "収集日"), ("items", "品目"), ("city", "設定"), ("geo", "今いる場所"), ("src", "元データ"), ("tools", "道具"), ("lic", "商用利用"), ("next", "次のカレンダー（市のサイト）")]
+COLS = [("cal", "収集日"), ("items", "品目"), ("city", "設定"), ("geo", "今いる場所"), ("addr", "住所"), ("src", "元データ"), ("tools", "道具"), ("lic", "商用利用"), ("next", "次のカレンダー（市のサイト）")]
 
 
 def main():
@@ -408,10 +558,16 @@ def main():
     for f in M.GEO.glob("*.json"):
         if f.name != "index.json":
             geo_cities.update(json.loads(f.read_text(encoding="utf-8")).get("cities", {}))
+    # 郵便番号一覧（tools/build_zip.py で作る）。県ごと
+    zips = {}
+    zdir = M.SOURCES / "全国" / "郵便番号" / "県別"
+    for f in zdir.glob("*.json"):
+        if f.name != "index.json":
+            zips[f.name[:2]] = json.loads(f.read_text(encoding="utf-8"))
     rows, all_notes = [], []
     for m in M.munis():
         print("調べています:", m)
-        row, notes = check_muni(m, now_fy, hol["year"], geo_cities, web, today)
+        row, notes = check_muni(m, now_fy, hol["year"], geo_cities, web, today, zips)
         rows.append((m, row, notes))
         all_notes += [(lv, m, t, how, key) for lv, t, how, key in notes]
     cols = [c for c in COLS if web or c[0] != "next"]
@@ -434,20 +590,20 @@ def main():
 <div class="wrap"><table>
 <thead><tr><th>都道府県</th><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead><tbody>"""]
     for m, row, notes in rows:
-        has_lic = any(n[3] == f"lic-{m.code}" for n in notes)
+        keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
         cells = "".join(
-            (f'<td class="c {row[k][0]}"><a class="cell" href="#lic-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a></td>'
-             if k == "lic" and has_lic else
+            (f'<td class="c {row[k][0]}"><a class="cell" href="#{k}-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a></td>'
+             if f"{k}-{m.code}" in keys else
              f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
             for k, _ in cols)
         body.append(f'<tr><td class="pref">{h(m.pref)} {h(m.pref_name)}</td><td class="name"><b>{h(m.name)}</b><small>{h(m.code)}</small></td>{cells}</tr>')
     body.append("</tbody></table></div>")
     body.append("<h2>直すこと・気をつけること</h2>")
     if all_notes:
-        order = {BAD: 0, WARN: 1}
+        order = {BAD: 0, WARN: 1, INFO: 2}
         body.append('<p class="howto">それぞれをクリックすると、どうすればよいかが出ます。</p><ul class="notes">' + "".join(
             (f'<li id="{key}">' if key else "<li>")
-            + f'<details><summary><span class="tag {lv}">{"直す" if lv == BAD else "注意"}</span><b>{h(m.name)}</b>　{h(t)}</summary>'
+            + f'<details><summary><span class="tag {lv}">{"直す" if lv == BAD else "注意" if lv == WARN else "参考"}</span><b>{h(m.name)}</b>　{h(t)}</summary>'
             + f'<div class="how">{how}</div></details></li>'
             for lv, m, t, how, key in sorted(all_notes, key=lambda x: (order[x[0]], x[1].code))) + "</ul>")
     else:
@@ -456,14 +612,17 @@ def main():
 <p class="howto">緑＝問題なし、黄＝気をつけること、赤＝直すこと。
 収集日は毎年4月に <code>download_sources.py</code> → <code>update_year.py</code> で更新します（くわしくは <code>gomiappV3.1/tools/README.md</code>）。
 自治体ごとの注意は <code>gomiappV3.1/tools/munis/&lt;県&gt;/&lt;自治体&gt;/README.md</code> にあります。<br>
-商用利用は <code>license.json</code> から出しています（可・出典表示で可＝緑、要確認・許可を問い合わせ中＝黄、要許可＝赤）。「オープンデータ：」は、そのデータをオープンデータから作っているもの（<code>opendata.py</code>・<code>calendar.py</code> から）。市のサイトの利用条件のまとめで、法律の判断ではありません。</p>
+商用利用は <code>license.json</code> から出しています（可・出典表示で可＝緑、要確認・許可を問い合わせ中＝黄、要許可＝赤）。「オープンデータ：」は、そのデータをオープンデータから作っているもの（<code>opendata.py</code>・<code>calendar.py</code> から）。市のサイトの利用条件のまとめで、法律の判断ではありません。<br>
+住所は、郵便番号一覧の町名（市の正式な町名。<code>元データ/全国/郵便番号/県別/</code>、<code>tools/build_zip.py</code> で作る）とくらべたもの。
+「町 a/b」は、その市の正式な町 b のうち、アプリで収集日の地区が見つかる町が a（町名が同じか、「今いる場所から探す」の町→地区の対応にある）。
+「参考」は数えていない知っておくこと（山の中の字など、直さなくてよいことが多い）。</p>
 </main>""")
     page = f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>状況一覧</title><style>{CSS}</style></head><body>{"".join(body)}<script>{JS}</script></body></html>'
     out = M.SOURCES / "状況一覧.html"
     out.write_text(page, encoding="utf-8")
     print(f"\n自治体 {len(rows)}・直すこと {n_bad}・気をつけること {n_warn}")
     for lv, m, t, *_ in all_notes:
-        print(f"  [{'直す' if lv == BAD else '注意'}] {m.name}：{t}")
+        print(f"  [{'直す' if lv == BAD else '注意' if lv == WARN else '参考'}] {m.name}：{t}")
     print("wrote", out)
 
 

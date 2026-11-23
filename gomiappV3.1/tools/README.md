@@ -25,7 +25,7 @@ gomiappV3.1/
     download_sources.py         毎年4月：市のサイトから新しいカレンダーをダウンロード
     update_opendata.py          オープンデータ（品目・収集地区など）を取ってきて、データを作り直す
     build_geo.py                地図（geo/）を作る
-    build_zip.py                全国の郵便番号一覧（zip/）を県ごとに作る（日本郵便のデータ）
+    build_zip.py                全国の郵便番号一覧を県ごとに作る（日本郵便のデータ。元データ/全国/郵便番号/県別/。町名の照合用で、アプリでは使わない）
     status.py                   状況一覧（元データ/状況一覧.html）を作る
     make_icons.py               アプリのアイコン（gomiappV3.1/icons/）を作る（絵を変えたいときは中の数字や色を直して実行）
     lib/                        道具みんなで使う部品（自治体の一覧の読み書き・ダウンロード・地図）
@@ -175,4 +175,4 @@ python gomiappV3.1/tools/update_opendata.py --check    ← 取ってきて、カ
 
 - **分別の冊子**（品目検索）：自治体ごとの README.md に作り方があります。改定されたら Claude に頼んでください。
 - **町の境目の地図**：国勢調査（5年ごと）の新しい境界データが出たら、各自治体の `地図/` の KML を差しかえて `python gomiappV3.1/tools/build_geo.py`
-- **郵便番号**：日本郵便のデータは毎月末ごろ更新。`python gomiappV3.1/tools/build_zip.py --download` で最新を取ってきて `zip/` を作り直す
+- **郵便番号**：日本郵便のデータは毎月末ごろ更新。`python gomiappV3.1/tools/build_zip.py --download` で最新を取ってきて `元データ/全国/郵便番号/県別/` を作り直す（状況一覧の「住所」の列と、京都市の町名の照合に使う）
