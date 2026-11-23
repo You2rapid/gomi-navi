@@ -24,6 +24,9 @@ sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import munis as M  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_muni as CM  # noqa: E402
+
 OK, WARN, BAD = "ok", "warn", "bad"
 INFO = "info"   # 知っておくこと（数えない）
 
@@ -534,6 +537,22 @@ table.lic th{position:static}
 .letter{width:100%;font:13px/1.6 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);resize:vertical}
 .copy{margin-top:6px;border:1px solid var(--accent);background:var(--surface);color:var(--accent);font-weight:700;border-radius:999px;padding:4px 14px;cursor:pointer}
 a.cell{color:inherit;text-decoration:none;display:block} a.cell b::after{content:" ›"}
+td.name a{color:inherit} .tag.ok{background:var(--ok-bg);color:var(--ok)}
+table.kv{min-width:0;font-size:13px} table.kv th{position:static;width:9em;white-space:nowrap}
+ul.chk{margin:4px 0 10px;padding-left:1.2em} ul.chk li{margin:2px 0}
+.bar{display:inline-flex;width:140px;height:9px;border-radius:5px;overflow:hidden;background:var(--line);vertical-align:middle;margin-left:8px}
+.bar.big{display:flex;width:100%;height:14px;margin:6px 0}
+.bar i,.legend i{display:block;height:100%} .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 12px}
+i.done{background:var(--ok)} i.fix{background:var(--bad)} i.wip{background:var(--warn)} i.todo{background:var(--line)}
+.legend{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+ul.prefs{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+ul.prefs>li{padding:6px 12px;border-bottom:1px solid var(--line)} ul.prefs>li:last-child{border-bottom:0}
+ul.prefs summary{cursor:pointer} ul.prefs .cnt{color:var(--muted);font-size:13px;margin-left:8px}
+ul.munis{display:flex;flex-wrap:wrap;gap:4px;list-style:none;margin:8px 0 4px;padding:0}
+ul.munis li{font-size:12.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+ul.munis li small{margin-left:3px;font-size:10.5px}
+ul.munis li.done{background:var(--ok-bg);color:var(--ok);border-color:transparent} ul.munis li.fix{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+ul.munis li.wip{background:var(--warn-bg);color:var(--warn);border-color:transparent} ul.munis a{color:inherit}
 :target{scroll-margin-top:12px}
 """
 
@@ -543,6 +562,94 @@ window.addEventListener("hashchange", openHash); openHash();
 """
 
 COLS = [("cal", "収集日"), ("items", "品目"), ("city", "設定"), ("geo", "今いる場所"), ("addr", "住所"), ("src", "元データ"), ("tools", "道具"), ("lic", "商用利用"), ("next", "次のカレンダー（市のサイト）")]
+
+
+# ---------------- 全国の進み具合 ----------------
+STATES = [("done", "できた"), ("fix", "直すことあり"), ("wip", "作業中"), ("todo", "未着手")]
+KIND = {"city": "市", "designated": "政令指定都市", "special": "特別区", "town": "町", "village": "村"}
+
+
+def todo_items(m):
+    """README.md の「人がやること」のうち、まだチェックしていないもの"""
+    f = m.tool_dir / "README.md"
+    if not f.exists():
+        return []
+    t = f.read_text(encoding="utf-8")
+    sec = re.search(r"^#+\s*人がやること\s*$(.*?)(?=^#+\s|\Z)", t, re.M | re.S)
+    return re.findall(r"^\s*[-*]\s*\[ \]\s*(.+)$", sec.group(1), re.M) if sec else []
+
+
+def progress(rows, checks):
+    """全国の自治体（コード表）ごとの状態。登録してあれば自動チェックの結果で、できた・直すことあり。
+    登録していなくて tools/munis/ にフォルダがあれば作業中"""
+    lg = CM.load_lgcode()
+    if not lg:
+        return None, {}
+    reg = {m.code: m for m, *_ in rows}
+    wip = {d.name.split("_")[0] for d in (M.TOOLS / "munis").glob("*/*") if d.is_dir()}
+    out = {}
+    for code, g in lg.items():
+        if g["kind"] == "ward":
+            continue
+        if code in reg:
+            st = "fix" if any(lv == CM.BAD for lv, _ in checks.get(code, [])) else "done"
+        elif code in wip:
+            st = "wip"
+        else:
+            st = "todo"
+        out[code] = (g, st)
+    prefs = json.loads(CM.LGCODE.read_text(encoding="utf-8"))["prefs"]
+    return prefs, out
+
+
+def progress_html(prefs, prog):
+    tot = {k: sum(1 for _, st in prog.values() if st == k) for k, _ in STATES}
+    n = len(prog)
+    html_ = [f"""<h2 id="progress">全国の進み具合</h2>
+<p class="howto">総務省の全国地方公共団体コード（{n:,} 市区町村。政令指定都市の区は市にふくめる）のうち、
+できた {tot['done']}・直すことあり {tot['fix']}・作業中 {tot['wip']}・未着手 {tot['todo']:,}。県をクリックすると自治体の一覧が出ます。</p>
+<div class="bar big">{''.join(f'<i class="{k}" style="width:{tot[k] / n * 100:.3f}%"></i>' for k, _ in STATES if tot[k])}</div>
+<p class="legend">{''.join(f'<span><i class="{k}"></i>{lb}</span>' for k, lb in STATES)}</p>
+<ul class="prefs">"""]
+    for p in prefs:
+        ms = [(g, st) for g, st in prog.values() if g["pref"] == p["code"]]
+        if not ms:
+            continue
+        c = {k: sum(1 for _, st in ms if st == k) for k, _ in STATES}
+        started = len(ms) - c["todo"]
+        items = "".join(
+            f'<li class="{st}">' + (f'<a href="#m-{g["code"]}">' if st in ("done", "fix") else "")
+            + f'{h(g["name"])}' + ("</a>" if st in ("done", "fix") else "") + f'<small>{h(KIND.get(g["kind"], ""))}</small></li>'
+            for g, st in sorted(ms, key=lambda x: (["done", "fix", "wip", "todo"].index(x[1]), x[0]["code"])))
+        html_.append(f'<li id="pref-{p["code"]}"><details{" open" if started else ""}><summary><b>{h(p["name"])}</b>'
+                     f'<span class="cnt">{c["done"] + c["fix"]}/{len(ms)}{f"（作業中 {c[chr(119) + chr(105) + chr(112)]}）" if c["wip"] else ""}</span>'
+                     f'<span class="bar">{"".join(f"<i class={chr(34)}{k}{chr(34)} style={chr(34)}width:{c[k] / len(ms) * 100:.2f}%{chr(34)}></i>" for k, _ in STATES if c[k])}</span></summary>'
+                     f'<ul class="munis">{items}</ul></details></li>')
+    html_.append("</ul>")
+    return "".join(html_)
+
+
+def detail_html(m, row, notes, checks, cols):
+    """自治体ごとのくわしく：列の中身・自動チェック・人がやること・直すこと気をつけること"""
+    res = checks.get(m.code, [])
+    bad = sum(1 for lv, _ in res if lv == CM.BAD)
+    todo = todo_items(m)
+    lv = "bad" if bad or any(n[0] == BAD for n in notes) else "warn" if todo or any(n[0] == WARN for n in notes) else "ok"
+    label = "直すことあり" if lv == "bad" else "人がやること・注意あり" if lv == "warn" else "問題なし"
+    cells = "".join(f'<tr><th>{h(t)}</th><td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td></tr>'
+                    for k, t in cols if k in row)
+    chk = "".join(f'<li><span class="tag {"bad" if l == CM.BAD else "warn" if l == CM.WARN else "info"}">{h(l)}</span>{h(t)}</li>' for l, t in res) \
+        or "<li>問題なし</li>"
+    td = "".join(f"<li>☐ {h(t)}</li>" for t in todo) or "<li>なし（README.md の「## 人がやること」にチェック欄で書く）</li>"
+    ns = "".join(f'<li><a href="#{k}">{h(t)}</a></li>' if k else f"<li>{h(t)}</li>" for l, t, _, k in notes if l != INFO) or "<li>なし</li>"
+    return (f'<li id="m-{m.code}"><details><summary><span class="tag {lv}">{label}</span><b>{h(m.pref_name)} {h(m.name)}</b>'
+            f'<small class="muted">　{h(m.code)}</small></summary><div class="how">'
+            f'<div class="wrap2"><table class="kv">{cells}</table></div>'
+            f'<h4>自動チェック（check_muni.py）：直す {bad}</h4><ul class="chk">{chk}</ul>'
+            f'<h4>人がやること（README.md）</h4><ul class="chk">{td}</ul>'
+            f'<h4>直すこと・気をつけること</h4><ul class="chk">{ns}</ul>'
+            f'<p class="muted">道具：<code>gomiappV3.1/tools/munis/{h(m.path)}/</code>　データ：<code>gomiappV3.1/data/{h(m.path)}/</code>　'
+            f'元データ：<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/</code></p></div></details></li>')
 
 
 def main():
@@ -570,6 +677,9 @@ def main():
         rows.append((m, row, notes))
         all_notes += [(lv, m, t, how, key) for lv, t, how, key in notes]
     cols = [c for c in COLS if web or c[0] != "next"]
+    lg = CM.load_lgcode()
+    checks = {m.code: CM.check(m, lg, geo_cities) for m, *_ in rows}
+    lg_prefs, prog = progress(rows, checks)
     e = html.escape
     n_bad = sum(1 for lv, *_ in all_notes if lv == BAD)
     n_warn = sum(1 for lv, *_ in all_notes if lv == WARN)
@@ -584,6 +694,7 @@ def main():
   <div><b>{n_bad}</b><span>直すこと</span></div>
   <div><b>{n_warn}</b><span>気をつけること</span></div>
   <div><b>{reiwa(hol['year'])}</b><span>祝日のデータ</span></div>
+  {f'<div><b>{sum(1 for _, st in prog.values() if st in ("done", "fix"))}/{len(prog):,}</b><span><a href="#progress">全国の進み具合</a></span></div>' if prog else ''}
 </div>
 <h2>自治体ごと</h2>
 <div class="wrap"><table>
@@ -595,8 +706,12 @@ def main():
              if f"{k}-{m.code}" in keys else
              f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
             for k, _ in cols)
-        body.append(f'<tr><td class="pref">{h(m.pref)} {h(m.pref_name)}</td><td class="name"><b>{h(m.name)}</b><small>{h(m.code)}</small></td>{cells}</tr>')
+        body.append(f'<tr><td class="pref">{h(m.pref)} {h(m.pref_name)}</td><td class="name"><a href="#m-{h(m.code)}"><b>{h(m.name)}</b></a><small>{h(m.code)}</small></td>{cells}</tr>')
     body.append("</tbody></table></div>")
+    body.append('<h2>自治体ごとのくわしく</h2><p class="howto">自治体の名前をクリックすると、表の中身・自動チェックの結果・人がやること（README.md）が出ます。</p><ul class="notes">'
+                + "".join(detail_html(m, row, notes, checks, cols) for m, row, notes in rows) + "</ul>")
+    if prog:
+        body.append(progress_html(lg_prefs, prog))
     body.append("<h2>直すこと・気をつけること</h2>")
     if all_notes:
         order = {BAD: 0, WARN: 1, INFO: 2}
