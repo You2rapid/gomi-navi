@@ -15,7 +15,7 @@ def parse_kml(path):
         for poly in re.findall(r"<Polygon>(.*?)</Polygon>", pm, re.S):
             for kind, body in re.findall(r"<(outer|inner)BoundaryIs>.*?<coordinates>(.*?)</coordinates>", poly, re.S):
                 rings.append([tuple(map(float, p.split(",")[:2])) for p in body.split()])
-        out.append({"name": d.get("S_NAME", ""), "x": float(d["X_CODE"]), "y": float(d["Y_CODE"]), "rings": rings})
+        out.append({"name": d.get("S_NAME", ""), "city": d.get("CITY_NAME", ""), "x": float(d["X_CODE"]), "y": float(d["Y_CODE"]), "rings": rings})
     return out
 
 def simplify(pts, tol):

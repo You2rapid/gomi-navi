@@ -81,6 +81,13 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
         if unknown:
             lv = BAD
             note(BAD, f"calendar.js に city.js にない区分があります（{'・'.join(unknown)}）")
+        ye = cal.get("yearEnd") or {}
+        if ye.get("tentative"):
+            lv = max(lv, WARN, key=[OK, WARN, BAD].index)
+            note(WARN, f"年末年始の休みが仮（{'〜'.join(ye.get('off', []))}）のままです",
+                 steps("市のホームページで「年末年始の家庭ごみ収集の日程」を探す（毎年10〜11月ごろに出る）",
+                       f"<code>gomiappV3.1/tools/munis/{h(m.path)}/calendar.py</code> の <code>YEAR_END</code> に、休みの期間と、その日だけ収集しない区分を足す",
+                       f"<code>python gomiappV3.1/tools/update_year.py {y} {m.code}</code> で作り直す"))
         empty = [s for s, v in cal["schedules"].items() if not v["days"]]
         if empty:
             lv = BAD
@@ -142,13 +149,13 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     next_y = cal_y + 1
     cur_ok, next_ok = complete(cal_y), complete(next_y)
     books = sorted(p.name for p in (m.src_dir / "分別の冊子").glob("*")) if (m.src_dir / "分別の冊子").exists() else []
-    kml = (m.src_dir / "地図" / f"r2ka{m.code}.kml").exists()
+    kml = (m.src_dir / "地図" / f"r2ka{m.code}.kml").exists() or any((m.src_dir / "地図").glob("r2ka*.kml"))   # 区のある市は区ごとの地図
     lv = OK if cur_ok and books and kml else WARN
     if not cur_ok:
         note(WARN, f"今の収集日の元にした 元データ/{m.src_dir.relative_to(M.SOURCES).as_posix()}/{cal_y}年度/ のファイルがそろっていません",
              steps(f"<code>python gomiappV3.1/tools/download_sources.py {cal_y} {m.code}</code> で保存し直す",
                    "市のサイトにもう無いときは、なくてもアプリは動きます。足りないファイル：" + h("・".join(f for f in need if not (m.year_dir(cal_y) / f).exists()))))
-    if not books:
+    if not books and not m.module("make_items"):
         note(WARN, "分別の冊子（品目の元にした資料）が元データにありません",
              f"<p>市のサイトから分別の冊子（PDF）を保存して、<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/分別の冊子/</code> に置きます。</p>")
     if not kml:
@@ -200,7 +207,10 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
              "<p>ほかの自治体の <code>license.json</code> をまねて、使っている資料ごとに、利用条件・判定・問い合わせ先を書きます（書き方は <code>gomiappV3.1/tools/README.md</code> の「商用利用」）。</p>")
 
     # ---- 次の年度（アプリに入っている年度の次）のカレンダーが市のサイトに出ているか ----
-    if web and can_dl:
+    if web and getattr(mod, "PERENNIAL", False):
+        # 町ごとの曜日で決まる市（京都市など）は毎年のカレンダーがない。年末年始は「収集日」の列で見る
+        row["next"] = (OK, "毎年同じ", "曜日で決まる（年末年始だけ毎年足す）")
+    elif web and can_dl:
         import web as W
         plan = W.Plan()
         try:

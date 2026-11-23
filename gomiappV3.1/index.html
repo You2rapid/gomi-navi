@@ -220,6 +220,8 @@ a{color:var(--accent)}
 .picker p{margin:0 0 10px;font-size:14px;color:var(--muted)}
 .seg{display:flex;gap:4px;background:var(--surface-2);border-radius:12px;padding:4px;margin:0 0 10px}
 .seg button{flex:1;border:0;background:transparent;padding:7px 2px;border-radius:9px;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg.many{flex-wrap:wrap}
+.seg.many button{flex:1 0 22%}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:700;box-shadow:var(--shadow)}
 .picker input{width:100%;font:inherit;font-size:16px;padding:10px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);outline:none;margin:0 0 10px}
 .picker input:focus{border-color:var(--accent)}
@@ -725,7 +727,7 @@ function makeCity(code, d){
     items: d.items.map(x => Array.isArray(x) ? {n:x[0], c:x[1], y:x[2], d:x[3]} : {...x}).map(it => it.k ? it : {...it, k: kanaHead(it.y)}),
     darkInk: new Set(c.darkInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
     regions: c.regions || [], regionName: r => r ? r + (c.regionSuffix || "") : "",
-    schedLabel: s => re && re.test(s) ? sp.label.replace("{s}", s) : s,
+    schedLabel: s => c.schedHide ? "" : re && re.test(s) ? sp.label.replace("{s}", s) : s,   // schedHide：日程の名前を出さない（京都市など、町ごとに曜日が決まる市）
     hint: c.hint || "", schedPick: c.schedPick || "", contact: c.contact, rules: c.rules, aiCat: c.aiCat || {},
     footer: c.footer.replace("{nendo}", nendo(d.calendar))
   };
@@ -759,7 +761,7 @@ const cutOf = () => (calState.area && calState.area.c === CITY_ID && CAL && CAL.
 const cutText = () => { const c = cutOf(); return `朝${c[0]}時${c[1] === 30 ? "半" : c[1] ? c[1] + "分" : ""}`; };
 const isLate = t => { const c = cutOf(); return t.getHours() * 60 + t.getMinutes() >= c[0] * 60 + c[1]; };
 // 地区の説明（例：周南市徳山地域・A日程／下松市）
-const areaSub = a => { const cy = CITIES[a.c], sl = cy.schedLabel(a.s); return cy.name + (a.r ? cy.regionName(a.r) : "") + (sl !== a.n ? "・" + sl : ""); };
+const areaSub = a => { const cy = CITIES[a.c], sl = cy.schedLabel(a.s); return cy.name + (a.r ? cy.regionName(a.r) : "") + (sl && sl !== a.n ? "・" + sl : ""); };
 
 // v3 から地区に市（c）を記録する。保存場所も v2 と分ける（v2 は下松市の地区を知らないため）
 const AREAS_KEY = "gomi3-areas", CUR_KEY = "gomi3-cur";
@@ -870,7 +872,7 @@ function renderCal(){
       <button class="btn-sub" data-pick>地区の追加・変更</button></div>`;
   if (calState.areas.length > 1){
     html += `<div class="seg area-switch" role="group" aria-label="表示する地区">${calState.areas.map((x, i) =>
-      `<button data-switch="${i}" aria-pressed="${i === calState.cur}">${esc(x.n.replace(/（.*?）/g, ""))}<small>${esc(CITIES[x.c].name)}${CITIES[x.c].schedLabel(x.s) !== x.n ? "・" + esc(CITIES[x.c].schedLabel(x.s)) : ""}</small></button>`).join("")}</div>`;
+      `<button data-switch="${i}" aria-pressed="${i === calState.cur}">${esc(x.n.replace(/（.*?）/g, ""))}<small>${esc(CITIES[x.c].name)}${(CITIES[x.c].schedLabel(x.s) || x.n) !== x.n ? "・" + esc(CITIES[x.c].schedLabel(x.s)) : ""}</small></button>`).join("")}</div>`;
   }
   html += remindHtml();
   const ns = inRange(today) ? notices() : [];
@@ -935,7 +937,7 @@ function renderPicker(){
   v.innerHTML = `<div class="picker">
     ${has ? `<h2>登録している地区</h2>
     <p>タップすると表示を切り替えます。自宅と実家など、${MAX_AREAS}か所まで登録できます。</p>
-    <ul class="area-list mine">${calState.areas.map((a, i) => `<li><button data-switch="${i}">${i === calState.cur ? `<span class="cur" aria-label="表示中">✓</span>` : `<span class="cur"></span>`}<span class="nm2"><span class="city-badge">${esc(CITIES[a.c].name)}</span>${esc(a.n)}</span>${CITIES[a.c].schedLabel(a.s) !== a.n ? `<span class="s">${esc(CITIES[a.c].schedLabel(a.s))}</span>` : ""}</button><button class="del" data-remove="${i}" aria-label="${esc(a.n)}を削除">✕</button></li>`).join("")}</ul>
+    <ul class="area-list mine">${calState.areas.map((a, i) => `<li><button data-switch="${i}">${i === calState.cur ? `<span class="cur" aria-label="表示中">✓</span>` : `<span class="cur"></span>`}<span class="nm2"><span class="city-badge">${esc(CITIES[a.c].name)}</span>${esc(a.n)}</span>${(CITIES[a.c].schedLabel(a.s) || a.n) !== a.n ? `<span class="s">${esc(CITIES[a.c].schedLabel(a.s))}</span>` : ""}</button><button class="del" data-remove="${i}" aria-label="${esc(a.n)}を削除">✕</button></li>`).join("")}</ul>
     <p style="margin-top:12px"><button class="btn-sub" data-pick-cancel>もどる</button></p>
     <h2 style="margin-top:22px">地区を追加する</h2>` : `<h2>お住まいの地区をえらんでください</h2>`}
     <p>市や町名によって、ごみの収集日がちがいます。えらんだ地区はこのスマホに記憶されます。</p>
@@ -947,7 +949,7 @@ function renderPicker(){
     <span class="step">市町村</span>
     <div class="seg">${MUNIS.filter(m => m.pref === MUNI[calState.city].pref).map(m => `<button data-city="${m.code}" aria-pressed="${calState.city === m.code}">${esc(m.name)}</button>`).join("")}</div>
     ${cy.regions.length ? `<span class="step">地域</span>
-    <div class="seg">${cy.regions.map(r => `<button data-region="${esc(r)}" aria-pressed="${calState.region === r}">${esc(r)}</button>`).join("")}</div>
+    <div class="seg${cy.regions.length > 5 ? " many" : ""}">${cy.regions.map(r => `<button data-region="${esc(r)}" aria-pressed="${calState.region === r}">${esc(r)}</button>`).join("")}</div>
     <input id="areaQ" type="search" placeholder="${esc(cy.hint)}" value="${esc(calState.q)}" autocomplete="off">`
     : `<span class="step">地区</span>`}
     <ul class="area-list" id="areaList"></ul>
@@ -964,7 +966,7 @@ function renderAreaList(){
   // 町名検索はえらんだ市の全域から。空欄のときはえらんだ地域の一覧（地域分けのない市はすべて）
   const list = cy.cal.areas.map((a, i) => ({...a, i})).filter(a => !cy.regions.length ? true
     : qn ? normChar(a.n).includes(qn) || normChar(a.y || "").includes(qn) : a.r === calState.region);
-  $("#areaList").innerHTML = list.length ? list.map(a => `<li><button data-area="${a.i}"><span class="nm2">${esc(a.n)}${a.d ? `<span class="desc">${esc(a.d)}</span>` : ""}</span>${qn ? `<span class="small">${esc(a.r)}</span>` : ""}${cy.schedLabel(a.s) !== a.n ? `<span class="s">${esc(cy.schedLabel(a.s))}</span>` : ""}</button></li>`).join("")
+  $("#areaList").innerHTML = list.length ? list.map(a => `<li><button data-area="${a.i}"><span class="nm2">${esc(a.n)}${a.d ? `<span class="desc">${esc(a.d)}</span>` : ""}</span>${qn ? `<span class="small">${esc(a.r)}</span>` : ""}${(cy.schedLabel(a.s) || a.n) !== a.n ? `<span class="s">${esc(cy.schedLabel(a.s))}</span>` : ""}</button></li>`).join("")
     : `<li style="padding:14px;color:var(--muted)">見つかりませんでした。漢字で入力するか、上の地域から探してください。</li>`;
 }
 // 市をえらび直したとき（地区がまだ1つもなければ、品目検索などもその市にする）
@@ -1102,7 +1104,7 @@ function geoBoxHtml(){
   const cy = CITIES[g.city], areas = cy.cal.areas;
   const head = `<p class="geo-hd">📍 <b>${esc(cy.name)} ${esc(g.name)}</b> ${g.near ? "の近く" : "のあたり"}にいるようです</p>
     ${g.rough ? `<p class="small">現在地の誤差が大きいので、ずれているかもしれません。</p>` : ""}`;
-  const row = (i, mark) => `<li><button data-area="${i}"><span class="nm2">${mark ? `<span class="city-badge geo-mark">${mark}</span>` : ""}${esc(areas[i].n)}${areas[i].d ? `<span class="desc">${esc(areas[i].d)}</span>` : ""}</span>${cy.schedLabel(areas[i].s) !== areas[i].n ? `<span class="s">${esc(cy.schedLabel(areas[i].s))}</span>` : ""}</button></li>`;
+  const row = (i, mark) => `<li><button data-area="${i}"><span class="nm2">${mark ? `<span class="city-badge geo-mark">${mark}</span>` : ""}${esc(areas[i].n)}${areas[i].d ? `<span class="desc">${esc(areas[i].d)}</span>` : ""}</span>${(cy.schedLabel(areas[i].s) || areas[i].n) !== areas[i].n ? `<span class="s">${esc(cy.schedLabel(areas[i].s))}</span>` : ""}</button></li>`;
   if (g.sides){
     const order = areas.map((a, i) => i).sort((a, b) => (areas[b].s === g.side) - (areas[a].s === g.side));
     return `<div class="geo-res">${head}

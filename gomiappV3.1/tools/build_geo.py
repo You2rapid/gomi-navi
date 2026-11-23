@@ -12,6 +12,7 @@
 
 地図は e-Stat「統計地理情報システム」の境界データ（国勢調査 令和2年 小地域（町丁・字等別）、世界測地系 緯度経度、KML）。
 元データ/<県>/<自治体>/地図/r2ka<自治体コード>.kml に置く（ダウンロードした .kmz は zip なので、中の .kml を取り出してこの名前にする）。
+区のある市（京都市など）は、区ごとに r2ka<区のコード>.kml（例：r2ka26101.kml〜r2ka26111.kml）を置けば、まとめて読む。
 出典：政府統計の総合窓口（e-Stat）国勢調査（令和2年）町丁・字等別境界データ を加工して作成。
 """
 import json
@@ -32,13 +33,15 @@ def build_pref(pref, ms, check=False):
     for m in ms:
         mod = m.module("geo")
         kml = m.src_dir / "地図" / f"r2ka{m.code}.kml"
+        # 区のある市（京都市など）は、区ごとの地図（r2ka26101.kml など）をまとめて読む
+        kmls = [kml] if kml.exists() else sorted((m.src_dir / "地図").glob("r2ka*.kml"))
         if not mod:
             print(f"  {m}：geo.py がないので、今いる場所から探すの対象外")
             continue
-        if not kml.exists():
+        if not kmls:
             raise SystemExit(f"{m}：地図がありません（{kml}）")
         cal = m.read("calendar")
-        towns = [t for t in parse_kml(kml) if t["name"]]
+        towns = [t for k in kmls for t in parse_kml(k) if t["name"]]
         info = mod.town_info(towns, cal)
         for t in towns:
             t["rings"] = [simplify(rg, TOL) for rg in t["rings"]]

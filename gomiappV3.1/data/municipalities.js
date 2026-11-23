@@ -6,6 +6,11 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "code": "35",
    "name": "山口県",
    "slug": "yamaguchi"
+  },
+  {
+   "code": "26",
+   "name": "京都府",
+   "slug": "kyoto"
   }
  ],
  "munis": [
@@ -29,6 +34,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "光市",
    "slug": "hikari",
    "yomi": "ひかりし"
+  },
+  {
+   "code": "26100",
+   "pref": "26",
+   "name": "京都市",
+   "slug": "kyoto",
+   "yomi": "きょうとし"
   }
  ]
 }/*MUNIS-END*/;
