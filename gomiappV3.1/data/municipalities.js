@@ -36,6 +36,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "yomi": "ひかりし"
   },
   {
+   "code": "35208",
+   "pref": "35",
+   "name": "岩国市",
+   "slug": "iwakuni",
+   "yomi": "いわくにし"
+  },
+  {
    "code": "26100",
    "pref": "26",
    "name": "京都市",
