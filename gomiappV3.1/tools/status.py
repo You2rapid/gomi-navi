@@ -39,7 +39,7 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
 
     def note(level, text, how=None, key=None):
         """how：クリックで開く「どうすればよいか」（HTML）。なければ自治体の README.md を案内する"""
-        notes.append((level, text, how or f"<p>くわしくは <code>gomiappV3.1/tools/munis/{e(m.path)}/README.md</code> を見てください。</p>", key))
+        notes.append((level, text, how or f"<p>くわしくは <code>gomiappV3.1/tools/munis/{h(m.path)}/README.md</code> を見てください。</p>", key))
 
     # ---- 設定（city.js）----
     try:
@@ -128,7 +128,7 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
             row["geo"] = (OK if none <= len(towns) * 0.1 else WARN, f"町丁 {len(towns)}", f"地区が決まらない町 {none}")
             if none > len(towns) * 0.1:
                 note(WARN, f"地区が決まらない町が {none} あります",
-                     steps(f"<code>gomiappV3.1/tools/munis/{e(m.path)}/geo.py</code> の町名と地区の対応表を見直す",
+                     steps(f"<code>gomiappV3.1/tools/munis/{h(m.path)}/geo.py</code> の町名と地区の対応表を見直す",
                            f"<code>python gomiappV3.1/tools/build_geo.py {m.pref}</code> で作り直す"))
 
     # ---- 元データ ----
@@ -147,14 +147,14 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     if not cur_ok:
         note(WARN, f"今の収集日の元にした 元データ/{m.src_dir.relative_to(M.SOURCES).as_posix()}/{cal_y}年度/ のファイルがそろっていません",
              steps(f"<code>python gomiappV3.1/tools/download_sources.py {cal_y} {m.code}</code> で保存し直す",
-                   "市のサイトにもう無いときは、なくてもアプリは動きます。足りないファイル：" + e("・".join(f for f in need if not (m.year_dir(cal_y) / f).exists()))))
+                   "市のサイトにもう無いときは、なくてもアプリは動きます。足りないファイル：" + h("・".join(f for f in need if not (m.year_dir(cal_y) / f).exists()))))
     if not books:
         note(WARN, "分別の冊子（品目の元にした資料）が元データにありません",
-             f"<p>市のサイトから分別の冊子（PDF）を保存して、<code>元データ/{e(m.src_dir.relative_to(M.SOURCES).as_posix())}/分別の冊子/</code> に置きます。</p>")
+             f"<p>市のサイトから分別の冊子（PDF）を保存して、<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/分別の冊子/</code> に置きます。</p>")
     if not kml:
         note(WARN, "地図（e-Stat の KML）が元データにありません",
              f"<p>e-Stat（政府統計の総合窓口）の「境界データ」で、国勢調査の小地域（町丁・字等）の {m.code} の KML を保存し、"
-             f"<code>元データ/{e(m.src_dir.relative_to(M.SOURCES).as_posix())}/地図/r2ka{m.code}.kml</code> に置きます。</p>")
+             f"<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/地図/r2ka{m.code}.kml</code> に置きます。</p>")
     row["src"] = (lv, "・".join(f"{y}" for y in years) + "年度" if years else "なし",
                   f"冊子 {len(books)}・地図 {'あり' if kml else 'なし'}" + (f"・{next_y}年度そろっている" if next_ok else ""))
 
@@ -164,7 +164,7 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
     row["tools"] = (OK if len(tools) == 3 and can_dl else WARN, f"{len(tools)}/3", "自動ダウンロード" + ("あり" if can_dl else "なし"))
     if not can_dl:
         note(WARN, "calendar.py に download がありません（毎年、手でダウンロード）",
-             f"<p>毎年4月に、<code>gomiappV3.1/tools/munis/{e(m.path)}/README.md</code> のダウンロード元から手で保存します。"
+             f"<p>毎年4月に、<code>gomiappV3.1/tools/munis/{h(m.path)}/README.md</code> のダウンロード元から手で保存します。"
              "自動にしたいときは、calendar.py に download を書きます（ほかの自治体のものをまねる）。</p>")
 
     # ---- 商用利用（license.json）と、使っているオープンデータ ----
@@ -187,8 +187,8 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
                 if checked and (today - dt.date.fromisoformat(checked)).days > 365:
                     pages = [lic.get("サイトの利用条件", {}), lic.get("オープンデータの方針", {})]
                     note(WARN, f"商用利用：利用条件を確かめてから1年以上たっています（{checked}）",
-                         steps(*[f'<a href="{e(x["URL"])}" target="_blank" rel="noopener">{e(x["URL"])}</a> を開いて、書いてあることが変わっていないか見る' for x in pages if x.get("URL")],
-                               f"変わっていなければ <code>gomiappV3.1/tools/munis/{e(m.path)}/license.json</code> の「確認した日」を今日の日付にする。変わっていたら中身も直す"))
+                         steps(*[f'<a href="{h(x["URL"])}" target="_blank" rel="noopener">{h(x["URL"])}</a> を開いて、書いてあることが変わっていないか見る' for x in pages if x.get("URL")],
+                               f"変わっていなければ <code>gomiappV3.1/tools/munis/{h(m.path)}/license.json</code> の「確認した日」を今日の日付にする。変わっていたら中身も直す"))
             except ValueError:
                 note(WARN, f"license.json の「確認した日」が日付になっていません（{checked}）")
         except Exception as e:
@@ -218,15 +218,15 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None):
                        "GitHub Desktop で Commit → Push origin"))
         if not found and late:
             note(BAD, f"{reiwa(next_y)}が始まっているのに、市のサイトで新しいカレンダーが見つかりません",
-                 steps(f"<code>gomiappV3.1/tools/munis/{e(m.path)}/README.md</code> のダウンロード元のページをブラウザで開く",
+                 steps(f"<code>gomiappV3.1/tools/munis/{h(m.path)}/README.md</code> のダウンロード元のページをブラウザで開く",
                        "ページの場所やファイルの名前が変わっていたら、calendar.py の download を直す（Claude に頼む）",
-                       "見つからない理由：" + e(plan.problems[0] if plan.problems else "不明")))
+                       "見つからない理由：" + h(plan.problems[0] if plan.problems else "不明")))
     elif web:
         row["next"] = (WARN, "調べられません", "自動ダウンロードなし")
     return row, notes
 
 
-e = html.escape
+h = html.escape   # HTML の文字にする（e は例外の名前に使っているので h）
 
 
 def steps(*items):
@@ -240,27 +240,27 @@ def lic_how(m, lic):
     ok = [x for x in rows if x not in need]
 
     def link(x):
-        return f'<a href="{e(x["元のURL"])}" target="_blank" rel="noopener">{e(x.get("元", ""))}</a>' if x.get("元のURL") else e(x.get("元", ""))
+        return f'<a href="{h(x["元のURL"])}" target="_blank" rel="noopener">{h(x.get("元", ""))}</a>' if x.get("元のURL") else h(x.get("元", ""))
 
-    out = [f"<p><b>{e(m.name)}で、商用に使う前に許可（または確認）が必要な情報</b>（{e(lic.get('確認した日', ''))} に確認）</p>",
+    out = [f"<p><b>{h(m.name)}で、商用に使う前に許可（または確認）が必要な情報</b>（{h(lic.get('確認した日', ''))} に確認）</p>",
            '<div class="wrap2"><table class="lic"><thead><tr><th>情報</th><th>アプリで使っているもの</th><th>元にした資料</th><th>市のきまり</th><th>判定</th></tr></thead><tbody>']
     for x in need:
         cls = "bad" if x["商用利用"] == "要許可" else "warn"
-        out.append(f'<tr><td><b>{e(x["データ"])}</b></td><td>{e(x.get("使っている情報", ""))}</td><td>{link(x)}</td>'
-                   f'<td>{e(x.get("利用条件", ""))}</td><td class="c {cls}"><b>{e(x["商用利用"])}</b></td></tr>')
+        out.append(f'<tr><td><b>{h(x["データ"])}</b></td><td>{h(x.get("使っている情報", ""))}</td><td>{link(x)}</td>'
+                   f'<td>{h(x.get("利用条件", ""))}</td><td class="c {cls}"><b>{h(x["商用利用"])}</b></td></tr>')
     out.append("</tbody></table></div>")
     if ok:
         out.append('<p class="muted">許可がいらないもの（出典を書けば使える）：'
-                   + "、".join(f"{e(x['データ'])}（{e(x.get('元', '').split('（')[0])}）" for x in ok) + "</p>")
+                   + "、".join(f"{h(x['データ'])}（{h(x.get('元', '').split('（')[0])}）" for x in ok) + "</p>")
     site = lic.get("サイトの利用条件", {})
     if site.get("URL"):
-        out.append(f'<p>市のサイトの利用条件：<a href="{e(site["URL"])}" target="_blank" rel="noopener">{e(site["URL"])}</a>'
-                   f'<br><span class="muted">{e(site.get("内容", ""))}</span></p>')
+        out.append(f'<p>市のサイトの利用条件：<a href="{h(site["URL"])}" target="_blank" rel="noopener">{h(site["URL"])}</a>'
+                   f'<br><span class="muted">{h(site.get("内容", ""))}</span></p>')
     contacts = lic.get("許可の問い合わせ先", [])
     if contacts:
         out.append("<h4>問い合わせ先</h4><ul>" + "".join(
-            f"<li>{e(c['課'])}　電話 {e(c.get('電話', ''))}"
-            + (f'　<a href="mailto:{e(c["メール"])}">{e(c["メール"])}</a>' if c.get("メール") else "") + "</li>"
+            f"<li>{h(c['課'])}　電話 {h(c.get('電話', ''))}"
+            + (f'　<a href="mailto:{h(c["メール"])}">{h(c["メール"])}</a>' if c.get("メール") else "") + "</li>"
             for c in contacts) + "</ul>")
     # 例文のあて先は、ごみのデータを作っている課（なければ最初の課）
     main = next((c for c in contacts if "ごみのデータ" in c["課"]), contacts[0] if contacts else None)
@@ -274,11 +274,11 @@ def lic_how(m, lic):
               "アプリには「市の公式アプリではないこと」「出典」「問い合わせ先として貴市の担当課」を表示しています。\n\n"
               "この使い方でアプリを公開してよいか、また、出典の書き方などの条件があれば教えていただけますでしょうか。\n"
               "（お名前・連絡先）")
-    out.append(f'<h4>問い合わせの例文</h4><textarea class="letter" readonly rows="14">{e(letter)}</textarea>'
+    out.append(f'<h4>問い合わせの例文</h4><textarea class="letter" readonly rows="14">{h(letter)}</textarea>'
                '<button class="copy" type="button" onclick="const t=this.previousElementSibling;t.select();'
                'if(navigator.clipboard)navigator.clipboard.writeText(t.value);this.textContent=&quot;写しました&quot;">文を写す</button>')
     out.append("<h4>許可をもらったら</h4>" + steps(
-        f"<code>gomiappV3.1/tools/munis/{e(m.path)}/license.json</code> の「許可の記録」に、日付・相手・結果・条件を書く",
+        f"<code>gomiappV3.1/tools/munis/{h(m.path)}/license.json</code> の「許可の記録」に、日付・相手・結果・条件を書く",
         "許可をもらった情報の「商用利用」を「可」（出典の指定があれば「出典表示で可」）に直し、いちばん上の「商用利用」も直す",
         "出典の書き方の指定があれば、アプリの下の出典（<code>city.js</code> の footer）を直す",
         "<code>python gomiappV3.1/tools/status.py</code> で、ここが緑になるか確かめる"))
@@ -323,7 +323,7 @@ def _opendata_used(m, web, note, today):
         try:
             if modified and (today - dt.date.fromisoformat(modified)).days > ds.get("old_days", OD_OLD_DAYS):
                 note(WARN, f"オープンデータ「{use}」は {modified} から更新されていません",
-                     steps(f'<a href="{e(url)}" target="_blank" rel="noopener">カタログのページ</a>で、新しいものが出ていないか見る',
+                     steps(f'<a href="{h(url)}" target="_blank" rel="noopener">カタログのページ</a>で、新しいものが出ていないか見る',
                            "市のサイトの分別の冊子やカレンダーが、これより新しく改定されていないか見る",
                            "古くなっていたら、市にオープンデータの更新をお願いするか、市の資料に戻す（Claude に相談）"))
         except ValueError:
@@ -422,22 +422,22 @@ def main():
 </div>
 <h2>自治体ごと</h2>
 <div class="wrap"><table>
-<thead><tr><th>都道府県</th><th>自治体</th>{''.join(f'<th>{e(t)}</th>' for _, t in cols)}</tr></thead><tbody>"""]
+<thead><tr><th>都道府県</th><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead><tbody>"""]
     for m, row, notes in rows:
         has_lic = any(n[3] == f"lic-{m.code}" for n in notes)
         cells = "".join(
-            (f'<td class="c {row[k][0]}"><a class="cell" href="#lic-{m.code}"><b>{e(row[k][1])}</b><small>{e(row[k][2])}</small></a></td>'
+            (f'<td class="c {row[k][0]}"><a class="cell" href="#lic-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a></td>'
              if k == "lic" and has_lic else
-             f'<td class="c {row[k][0]}"><b>{e(row[k][1])}</b><small>{e(row[k][2])}</small></td>') if k in row else "<td></td>"
+             f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
             for k, _ in cols)
-        body.append(f'<tr><td class="pref">{e(m.pref)} {e(m.pref_name)}</td><td class="name"><b>{e(m.name)}</b><small>{e(m.code)}</small></td>{cells}</tr>')
+        body.append(f'<tr><td class="pref">{h(m.pref)} {h(m.pref_name)}</td><td class="name"><b>{h(m.name)}</b><small>{h(m.code)}</small></td>{cells}</tr>')
     body.append("</tbody></table></div>")
     body.append("<h2>直すこと・気をつけること</h2>")
     if all_notes:
         order = {BAD: 0, WARN: 1}
         body.append('<p class="howto">それぞれをクリックすると、どうすればよいかが出ます。</p><ul class="notes">' + "".join(
             (f'<li id="{key}">' if key else "<li>")
-            + f'<details><summary><span class="tag {lv}">{"直す" if lv == BAD else "注意"}</span><b>{e(m.name)}</b>　{e(t)}</summary>'
+            + f'<details><summary><span class="tag {lv}">{"直す" if lv == BAD else "注意"}</span><b>{h(m.name)}</b>　{h(t)}</summary>'
             + f'<div class="how">{how}</div></details></li>'
             for lv, m, t, how, key in sorted(all_notes, key=lambda x: (order[x[0]], x[1].code))) + "</ul>")
     else:
