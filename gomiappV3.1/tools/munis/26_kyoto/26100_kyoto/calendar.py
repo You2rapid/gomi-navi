@@ -12,10 +12,12 @@
 まだ発表がない年度は 12/31〜1/3 を休みとして作り、データに「仮」の印を付ける（状況一覧で注意が出る）。
 
 町名別一覧表は区ごとの PDF（右京区の京北地域だけは別の PDF）。表の「〃」は、上の行と同じ町（または同じ頭の町名）。
-「〃」で省かれた頭の部分は、e-Stat の町名（元データ/.../地図/）と照らし合わせて決める。
+「〃」で省かれた頭の部分は、日本郵便の郵便番号データの町名（gomiappV3.1/zip/。市の正式な町名）と
+e-Stat の町名（元データ/.../地図/）と照らし合わせて決める。
 """
 import calendar as _cal
 import datetime as dt
+import json
 import re
 import sys
 import unicodedata
@@ -168,7 +170,52 @@ def estat_names(folder, ward):
 
 def loose(s):
     """表記ゆれをそろえる（ヶ・ケ・が、峯・峰 など）"""
-    return s.translate(str.maketrans({"ヶ": "ケ", "ｹ": "ケ", "峯": "峰", "之": "ノ", "の": "ノ"}))
+    return s.translate(str.maketrans({"ヶ": "ケ", "ｹ": "ケ", "峯": "峰", "之": "ノ", "の": "ノ", "薮": "藪", "龍": "竜"}))
+
+
+ZIP = Path(__file__).resolve().parents[4] / "zip" / "26_kyoto.json"
+_zip = {}
+
+
+def postal_names(ward):
+    """日本郵便の郵便番号データ（gomiappV3.1/zip/、tools/build_zip.py で作る）の、区の町名。
+    市の正式な町名で、e-Stat のような学区の頭は付かない。丁目はかっこの中（"s"）にあるので、町名には付かない"""
+    if not ZIP.exists():
+        return []
+    if not _zip:
+        _zip.update(json.loads(ZIP.read_text(encoding="utf-8")))
+    code = str(WARD_CODE[ward])
+    return sorted({e["t"] for v in _zip["zips"].values() for e in v if e["c"] == code and e.get("t")})
+
+
+# 町名別一覧表と郵便番号の町名で、1文字だけちがうときに、同じ町とみなす文字の組（一覧表の字, 郵便番号の字）。
+# 異体字（圓・円、背・脊 など）と、一覧表の誤字とみられるもの（突技→突抜、管大臣→菅大臣、ハ反田→八反田 など）
+PAIRS = {("圓", "円"), ("皂", "皀"), ("背", "脊"), ("り", "リ"), ("檜", "桧"), ("籠", "篭"), ("壇", "檀"), ("斉", "斎"),
+         ("州", "洲"), ("槙", "槇"), ("曾", "曽"), ("淵", "渕"), ("阪", "坂"), ("己", "巳"), ("治", "冶"), ("粱", "梁"),
+         ("技", "抜"), ("管", "菅"), ("観", "勧"), ("新", "神"), ("構", "講"), ("際", "祭"), ("ハ", "八"), ("道", "通"),
+         ("上", "神")}
+
+
+def postal_fix(b, post):
+    """郵便番号の町名に無い町名を、郵便番号の書き方に直す（1つに決まるときだけ）。
+    1文字だけ PAIRS の組でちがうもの、終わりの「町」があるかないかだけちがうもの。丁目と（通りの側など）はそのまま残す"""
+    m = re.match(r"^(.*?)([一二三四五六七八九十0-9]+丁目)?(（[^）]*）)?$", b)
+    stem, suf = m.group(1), (m.group(2) or "") + (m.group(3) or "")
+    c = []
+    for t in post:
+        if len(t) == len(stem):
+            d = [(x, y) for x, y in zip(stem, t) if x != y]
+            if len(d) == 1 and d[0] in PAIRS:
+                c.append(t)
+        elif t == stem + "町" or t + "町" == stem:
+            c.append(t)
+    return c[0] + suf if len(c) == 1 else None
+
+
+def pkey(x):
+    """郵便番号の町名とくらべる形：かっこ（通りの側など）と丁目を取り、表記ゆれをそろえる"""
+    x = nfkc(re.sub(r"（.*?）$", "", x))
+    return loose(re.sub(r"[一二三四五六七八九十0-9]+丁目$", "", x))
 
 
 def prefix_hits(parent, child, names):
@@ -189,7 +236,9 @@ def prefix_by_reading(parent, yomi):
 
 
 def read_ward(pdf, ward, folder, problems):
-    names = estat_names(folder, ward)
+    post = postal_names(ward)
+    P = {pkey(t) for t in post}
+    names = estat_names(folder, ward) + post
     ln = [loose(n) for n in names]
     out, groups, last, buf, pend, notes = [], [], None, "", "", []
     for pg, top, bot, tokens in lines_of(pdf):
@@ -237,7 +286,7 @@ def read_ward(pdf, ward, folder, problems):
             row["child"] = kanji.lstrip("〃")
             groups[-1]["children"].append(row)
         else:
-            groups.append({"parent": kanji, "yomi": yomi, "children": []})
+            groups.append({"parent": kanji, "yomi": yomi, "children": [], "row": row})
         out.append(row)
         last = row
     # 備考：備考の欄は、町の行の高さを真ん中にして上下に何行も書かれている。
@@ -257,7 +306,19 @@ def read_ward(pdf, ward, folder, problems):
     for r in out:
         p = pieces[id(r)] + ([(r["pos"][1], r["note"])] if r["note"] else [])
         r["note"] = "".join(t for _, t in sorted(p, key=lambda x: x[0]))
-    # 「〃」のまとまりごとに頭を決める：子の町名を e-Stat と照らし合わせて、いちばん多く合う頭の長さ。
+    def in_post(x):
+        return pkey(x) in P
+    # 「〃」の付かない町でも、頭を省いていることがある（例：西京区「大枝北沓掛町一丁目」の次の「北福西町 一丁目」は大枝北福西町）。
+    # 郵便番号の町名に無いときは、前のまとまりの町の頭をつけてためす
+    for gi, g in enumerate(groups):
+        if not P or in_post(g["parent"]) or (ward, g["parent"]) in PREFIX_FIX:
+            continue
+        for h in reversed(groups[max(0, gi - 3):gi]):
+            ks = [k for k in range(1, len(h["parent"])) if in_post(h["parent"][:k] + g["parent"])]
+            if ks:       # 足す頭はいちばん短いもの（「大枝北」でなく「大枝」）
+                g["parent"] = g["row"]["base"] = h["parent"][:ks[0]] + g["parent"]
+                break
+    # 「〃」のまとまりごとに頭を決める：子の町名を郵便番号・e-Stat の町名と照らし合わせて、いちばん多く合う頭の長さ。
     # 合わなければ、上の町の読みの長さ、丁目、e-Stat の町名の分かれ目の順で決める
     for g in groups:
         if not g["children"]:
@@ -295,6 +356,15 @@ def read_ward(pdf, ward, folder, problems):
             near = prev[-1] if prev else g["parent"]
             if re.fullmatch(cho, c["child"]) and re.search(cho, near):
                 c["base"] = re.sub(cho, "", near) + c["child"]
+            cands = list(reversed(prev)) + [g["parent"]] + [h["parent"] for h in reversed(groups[max(0, gi - 3):gi])]
+            if P and not in_post(c["base"]) and not known(c["base"]):
+                # 郵便番号にも e-Stat にも無い町名：郵便番号の町名に合う頭をさがす（いちばん短い頭）。
+                # どれも合わなければ頭なし（例：上賀茂の「〃 上御霊上江町」は上御霊上江町）
+                hit = next((p[:k] + c["child"] for p in cands for k in range(1, len(p)) if in_post(p[:k] + c["child"])), None)
+                if hit is None and in_post(c["child"]):
+                    hit = c["child"]
+                if hit:
+                    c["base"] = hit
             if not known(c["base"]):
                 for p in list(reversed(prev)) + [g["parent"]] + [h["parent"] for h in reversed(groups[max(0, gi - 3):gi])]:
                     ks = [k for k in range(len(p) - 1, 0, -1) if known(p[:k] + c["child"])]
@@ -330,6 +400,21 @@ def read_ward(pdf, ward, folder, problems):
         r.pop("same", None)
         r.pop("child", None)
         r.pop("pos", None)
+    # 郵便番号の町名に無い町名は、郵便番号の書き方に直せるものは直す（異体字・誤字・「町」のあるなし）
+    if P:
+        fixed = {}
+        for r in out:
+            if r["vals"] is not None and not in_post(r["base"]):
+                f = fixed.setdefault(r["base"], postal_fix(r["base"], post))
+                if f:
+                    r["base"] = f
+        for a, b in sorted((a, b) for a, b in fixed.items() if b):
+            problems.append(f"{ward}{a} → {b}：郵便番号の町名の書き方に直した")
+    # 郵便番号の町名に見つからない町（読み取りのまちがいか、表記のちがい。手で確かめる用）
+    if P:
+        miss = sorted({r["base"] for r in out if r["vals"] is not None and not in_post(r["base"])})
+        for b in miss:
+            problems.append(f"{ward}{b}：郵便番号の町名に見つからない")
     return out
 
 

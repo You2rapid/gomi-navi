@@ -13,7 +13,7 @@
 | 場所 | 内容 |
 | --- | --- |
 | `gomiappV3.0/` | アプリ本体（ごみ出しカレンダー 3.0）。データと作る道具も入っている |
-| `gomiappV3.1/` | 次の版（3.1）。3.0 に通知を足したもの。https://you2rapid.github.io/gomi-navi/gomiappV3.1/ <br>・カレンダーの日にちを長押し →「🔔 この日を知らせる」で、その日だけ1回知らせる（時刻はスライドバーで決める）<br>・開いたときに「あしたは○○の日です」を出す |
+| `gomiappV3.1/` | 次の版（3.1）。3.0 に通知を足したもの。https://you2rapid.github.io/gomi-navi/gomiappV3.1/ <br>・カレンダーの日にちを長押し →「🔔 この日を知らせる」で、その日だけ1回知らせる（時刻はスライドバーで決める）<br>・開いたときに「あしたは○○の日です」を出す<br>・地区をえらぶ画面で、郵便番号（7けた）から地区の候補を出す（zip/：日本郵便のデータ、tools/build_zip.py で作る） |
 | `gomiapp-store/` | ストア版（iPhone・Android のアプリ）。gomiappV3.1 を Capacitor で包んだもの。作り方は gomiapp-store/README.md |
 | `gomiappV3.0/tools/README.md` | データの置き場所、毎年4月の更新、自治体の増やし方、状況一覧 |
 | `index.html`・`v3/index.html` | 前の場所から新しい場所へ案内するページ |
