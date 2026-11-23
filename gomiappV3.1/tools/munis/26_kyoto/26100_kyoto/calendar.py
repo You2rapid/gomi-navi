@@ -69,8 +69,8 @@ def nfkc(s):
 
 
 def lines_of(pdf):
-    """PDF の行（同じ高さの文字のかたまり）を、左から順の文字列のリストで返す"""
-    for page in pymupdf.open(pdf):
+    """PDF の行（同じ高さの文字のかたまり）を、(ページ, 上の高さ, 下の高さ, 左から順の文字列のリスト) で返す"""
+    for pg, page in enumerate(pymupdf.open(pdf)):
         rows = []
         for w in sorted(page.get_text("words"), key=lambda w: ((w[1] + w[3]) / 2, w[0])):
             y = (w[1] + w[3]) / 2
@@ -78,8 +78,8 @@ def lines_of(pdf):
                 rows[-1][1].append(w)
             else:
                 rows.append([y, [w]])
-        for _, ws in rows:
-            yield [w[4] for w in sorted(ws, key=lambda w: w[0])]
+        for y, ws in rows:
+            yield pg, min(w[1] for w in ws), max(w[3] for w in ws), [w[4] for w in sorted(ws, key=lambda w: w[0])]
 
 
 WD1 = r"[月火水木金]"
@@ -107,7 +107,8 @@ def parse_row(text):
     flat = re.sub(r"収集して|いません", "", flat)
     # 名前と値の境目：読みのかっこが閉じたところ（値より前にあるとき）。なければ最初の「曜日・曜日」か曜日
     mv = re.search(WD1 + "(・" + WD1 + ")?" + "(" + WD1 + "|第)", flat) or (re.search(WD1 + "・" + WD1, flat) if partial else None)
-    mp = re.search(r"[)）]", flat)
+    mp = re.search(r"[(（][ぁ-ん〃][^()（）]*[)）]", flat)     # 読みのかっこ（「（右京の里）」のような漢字のかっこは名前の一部）
+    unclosed = mv and not mp and re.search(r"[(（][ぁ-ん〃][^()（）]*$", flat[:mv.start()])
     if mp and (not mv or mp.start() < mv.start()):
         name, rest = flat[:mp.end()], flat[mp.end():]
     elif mv:
@@ -127,13 +128,22 @@ def parse_row(text):
     if v["z"]:
         z = re.match(r"([1-4])・([1-4])([火水])", v["z"])
         vals["雑がみ"] = (int(z[1]), int(z[2]), z[3])
-    return name, vals, v["note"]
+    note = v["note"]
+    if unclosed:
+        tail = re.search(r"[ぁ-ん]+$", note)    # 読みの続きが同じ高さに来たもの（残りは次の行）
+        if tail:
+            name, note = name + tail.group(0), note[:tail.start()]
+    return name, vals, note
 
 
 def split_name(s):
     """「出雲路神楽町(いずもじかぐらちょう)」→ (出雲路神楽町, いずもじかぐらちょう)"""
-    m = re.match(r"^(.*?)[（(](.*?)[）)]?$", s)
-    kanji, yomi = (m.group(1), m.group(2)) if m else (s, "")
+    m = re.search(r"[（(]([ぁ-ん〃][^（()）]*)[）)]?$", s)    # 終わりの読みのかっこ
+    if not m:
+        kanji, yomi = s, ""      # 読みのかっこが無い（「沓掛町（西山団地）」の読みは別の行）
+    else:
+        kanji, yomi = s[:m.start()], m.group(1)
+    kanji = kanji.replace("(", "（").replace(")", "）")      # 「（右京の里）」など、名前の中のかっこ
     return kanji, yomi.replace("〃", "")
 
 
@@ -181,17 +191,29 @@ def prefix_by_reading(parent, yomi):
 def read_ward(pdf, ward, folder, problems):
     names = estat_names(folder, ward)
     ln = [loose(n) for n in names]
-    out, groups, last, buf = [], [], None, ""
-    for tokens in lines_of(pdf):
+    out, groups, last, buf, pend, notes = [], [], None, "", "", []
+    for pg, top, bot, tokens in lines_of(pdf):
         line = "".join(tokens).strip("　 ")
         if not line or SKIP_LINE.match(re.sub(r"\s+", "", line.replace("　", ""))):
+            continue
+        flat = re.sub(r"\s+", "", nfkc(line))
+        if not buf and re.fullmatch(r"[(（][ぁ-ん〃・]+", flat):
+            pend = flat[1:].replace("〃", "")      # 2行の読みの1行目が、町名より上に来たもの（「沓掛町（西山団地）」）
+            continue
+        if not buf and last and re.fullmatch(r"[(（][ぁ-ん〃・]+[)）]", flat):
+            if not last["yomi"]:
+                last["yomi"] = flat[1:-1].replace("〃", "")   # 値と同じ高さに町名が来て、読みだけが次の行にあるもの
+            continue
+        if not buf and last and re.fullmatch(r"[ぁ-ん・]*[)）]", flat):
+            last["yomi"] += flat[:-1]                           # 読みのかっこの残り（読みが2行のもの）
             continue
         raw, vals, note = parse_row(buf + line)
         if vals is False:
             if buf or looks_like_name(line):
                 buf += line          # 町名や読みが次の行に続く
             elif last:
-                last["note"] = (last["note"] + re.sub(r"\s+", "", nfkc(line))).strip()   # 備考の続き
+                if not re.fullmatch(r"(収集して|いません)+", flat):    # 「収集していません」の切れはし
+                    notes.append((pg, top, bot, flat, last))   # 備考（あとで、近いほうの町に付ける）
             else:
                 problems.append(f"{ward}：読めない行「{line[:40]}」")
             if len(buf) > 120:
@@ -200,11 +222,17 @@ def read_ward(pdf, ward, folder, problems):
             continue
         buf = ""
         kanji, yomi = split_name(raw)
-        row = {"base": kanji, "yomi": yomi, "vals": vals, "note": note}
+        if pend and not yomi:
+            yomi = pend
+        pend = ""
+        row = {"base": kanji, "yomi": yomi, "vals": vals, "note": note, "pos": (pg, top, bot)}
         if kanji.startswith("〃") and kanji.endswith("側") and last:
             kanji, row["note"] = "〃", kanji.lstrip("〃") + note   # 「〃 河原町三条側」：同じ町の、通りの側ちがい
         if kanji in ("", "〃") and last:
             row["same"] = last           # 同じ町で、通りの東西などで分かれている
+        elif kanji.startswith("〃〃") and groups and groups[-1]["children"]:
+            row["child"] = kanji.lstrip("〃")     # 「〃〃京道町」：上の「〃 石原上川原町」の頭（吉祥院＋石原）を2つ省いたもの
+            groups[-1]["children"][-1].setdefault("subs", []).append(row)
         elif kanji.startswith("〃") and groups:
             row["child"] = kanji.lstrip("〃")
             groups[-1]["children"].append(row)
@@ -212,6 +240,23 @@ def read_ward(pdf, ward, folder, problems):
             groups.append({"parent": kanji, "yomi": yomi, "children": []})
         out.append(row)
         last = row
+    # 備考：備考の欄は、町の行の高さを真ん中にして上下に何行も書かれている。
+    # すき間なく続く備考の行を1つのかたまりにして、かたまりの真ん中にいちばん近い町に付ける
+    blocks = []
+    for n in notes:
+        if blocks and blocks[-1][-1][0] == n[0] and n[1] - blocks[-1][-1][2] <= 2.2:
+            blocks[-1].append(n)
+        else:
+            blocks.append([n])
+    pieces = defaultdict(list)
+    for b in blocks:
+        c = (b[0][1] + b[-1][2]) / 2
+        same_page = [r for r in out if r["pos"][0] == b[0][0]]
+        r = min(same_page, key=lambda r: abs((r["pos"][1] + r["pos"][2]) / 2 - c)) if same_page else b[0][4]
+        pieces[id(r)] += [(n[1], n[3]) for n in b]
+    for r in out:
+        p = pieces[id(r)] + ([(r["pos"][1], r["note"])] if r["note"] else [])
+        r["note"] = "".join(t for _, t in sorted(p, key=lambda x: x[0]))
     # 「〃」のまとまりごとに頭を決める：子の町名を e-Stat と照らし合わせて、いちばん多く合う頭の長さ。
     # 合わなければ、上の町の読みの長さ、丁目、e-Stat の町名の分かれ目の順で決める
     for g in groups:
@@ -227,20 +272,64 @@ def read_ward(pdf, ward, folder, problems):
             for k in prefix_hits(parent, c["child"], names):
                 votes[k] = votes.get(k, 0) + 1
         pre = parent[:max(votes, key=lambda k: (votes[k], k))] if votes else prefix_by_reading(parent, g["yomi"])
-        if pre is None and all(re.search(r"[一二三四五六七八九十]+丁目$", c["child"]) for c in g["children"]):
-            pre = re.sub(r"[一二三四五六七八九十]+丁目$", "", parent)
+        if pre is None and all(re.search(r"[一二三四五六七八九十0-9]+丁目$", c["child"]) for c in g["children"]):
+            pre = re.sub(r"[一二三四五六七八九十0-9]+丁目$", "", parent)
         if pre is None:
             ks = [k for k in range(1, len(parent) - 1) if any(loose(parent[:k]) in n and loose(parent[:k + 1]) not in n for n in ln)]
             pre = parent[:max(ks)] if ks else ""
             problems.append(f"{ward}：「〃{g['children'][0]['child']}」などの頭を、e-Stat の町名の分かれ目から「{pre}」にした（上の町：{parent}）")
         for c in g["children"]:
             c["base"] = pre + c["child"]
+    # 頭をつけた町名が e-Stat に無いときは、上の町（前のまとまり）の頭でためす。
+    # 例：「大枝北沓掛町一丁目／北福西町 一丁目（大枝を省いている）／〃 沓掛町」→ 大枝沓掛町
+    def known(x):
+        x = loose(re.sub(r"（.*?）$", "", x))
+        return any(n.endswith(x) for n in ln)
+    # 「〃 二丁目」は、すぐ上の「…一丁目」の町の続き（例：〃 西新林町一丁目 → 〃 二丁目 は 西新林町二丁目）
+    cho = r"[一二三四五六七八九十0-9]+丁目$"
+    for gi, g in enumerate(groups):
+        if (ward, g["parent"]) in PREFIX_FIX:
+            continue
+        prev = []
+        for c in g["children"]:
+            near = prev[-1] if prev else g["parent"]
+            if re.fullmatch(cho, c["child"]) and re.search(cho, near):
+                c["base"] = re.sub(cho, "", near) + c["child"]
+            if not known(c["base"]):
+                for p in list(reversed(prev)) + [g["parent"]] + [h["parent"] for h in reversed(groups[max(0, gi - 3):gi])]:
+                    ks = [k for k in range(len(p) - 1, 0, -1) if known(p[:k] + c["child"])]
+                    if ks:
+                        c["base"] = p[:ks[0]] + c["child"]
+                        break
+            prev.append(c["base"])
+    # 「〃〃」の町：上の「〃」の町の名前から、2つめの頭を決める（e-Stat と照らし合わせて、いちばん多く合う長さ）
+    for g in groups:
+        for c in g["children"]:
+            subs = c.get("subs")
+            if not subs:
+                continue
+            head, base = len(c["base"]) - len(c["child"]), c["base"]
+            votes = {}
+            for s in subs:
+                for k in range(head + 1, len(base)):
+                    if known(base[:k] + s["child"]):
+                        votes[k] = votes.get(k, 0) + 1
+            if votes:
+                k = max(votes, key=lambda k: (votes[k], k))
+            elif all(re.search(r"[一二三四五六七八九十0-9]+丁目$", s["child"]) for s in subs):
+                k = len(re.sub(r"[一二三四五六七八九十0-9]+丁目$", "", base))
+            else:
+                k = head
+                problems.append(f"{ward}：「〃〃{subs[0]['child']}」などの2つめの頭が決まらないので「{base[:k]}」にした（上の町：{base}）")
+            for s in subs:
+                s["base"] = base[:k] + s["child"]
     for r in out:
         if "same" in r:
             r["base"] = r["same"]["base"]
     for r in out:
         r.pop("same", None)
         r.pop("child", None)
+        r.pop("pos", None)
     return out
 
 
