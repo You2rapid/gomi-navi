@@ -40,7 +40,7 @@
 | 4 | いちばん似ている自治体の道具をまねて `calendar.py` を作る（下の「まねる元」）。`python gomiappV3.1/tools/update_year.py <年度> <コード>` | `calendar.js` |
 | 5 | 品目を作る（オープンデータなら `opendata.py`、なければ `make_items.py`） | `items.js` |
 | 6 | `city.js` を作る（区分・色・袋・出し方・問い合わせ先・画面下の出典） | `city.js` |
-| 7 | e-Stat の町丁・字の境界 KML を `地図/` に置き、`geo.py` を作って `python gomiappV3.1/tools/build_geo.py <県コード>` | `geo/<県>.json` |
+| 7 | e-Stat の町丁・字の境界 KML を `地図/` に置き、`geo.py` を作って `python gomiappV3.1/tools/build_geo.py <県コード>` | `geo/<県>.json` と `geo/index.json`（県の範囲。どちらもコミットする） |
 | 8 | `license.json` を書く（ほかの自治体のものをまねる） | 商用利用の記録 |
 | 9 | `README.md` を書く（下の「作業報告の形」） | 作業報告 |
 | 10 | 自動チェック：`python gomiappV3.1/tools/check_muni.py <コード>` →「直す」を0にする | － |
