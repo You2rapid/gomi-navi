@@ -581,16 +581,44 @@ details.pg[open]>summary::before{content:"▾"}
 details.pg .cnt{color:var(--muted);font-size:13px;margin:0 10px}
 details.pg .wrap{border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}
 table.pt{table-layout:fixed;min-width:0} table.pt th,table.pt td{overflow-wrap:anywhere}
-p.tools{margin:12px 0 0;display:flex;gap:6px} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
+p.tools{margin:12px 0 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center} p.tools .sp{flex:1}
+p.tools label{font-size:13px;color:var(--muted)} p.tools select{font-size:13px;margin-left:4px}
+.ubs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+button.ub{border:1px solid var(--accent);background:var(--surface);color:var(--accent);font-weight:700;border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
+button.ub:disabled{opacity:.5;cursor:wait}
+pre.log{background:#111;color:#dfe;font-size:12px;line-height:1.5;padding:8px 10px;border-radius:8px;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 """
 
-JS = """
+JS = r"""
 function openHash(){ const el = location.hash && document.getElementById(location.hash.slice(1)); if (el){
   for (let p = el.parentElement; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true;
   const d = el.querySelector("details"); if (d) d.open = true; el.scrollIntoView({block:"start"}); } }
 function secAll(o){ document.querySelectorAll("details.sec, details.pg").forEach(d => d.open = o); }
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute("href") === location.hash) openHash(); });
 window.addEventListener("hashchange", openHash); openHash();
+// 更新ボタン：admin.py（http://127.0.0.1:8765/）で開いたときは道具を動かし、ファイルで開いたときはコマンドを出す
+const SERVED = location.protocol.startsWith("http");
+if (!SERVED) document.querySelector(".admin-off").hidden = false;
+const CMD = {status: () => "status.py", list: (c, y) => `download_sources.py ${y} ${c} --list`, download: (c, y) => `download_sources.py ${y} ${c}`,
+  update: (c, y) => `update_year.py ${y} ${c}`, opendata: c => `update_opendata.py ${c}`, check: c => `check_muni.py ${c}`};
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button.ub"); if (!b) return;
+  const box = b.closest(".upd"), code = box ? box.dataset.code : null, tool = b.dataset.tool;
+  const year = +document.getElementById("fy").value;
+  const log = box ? box.querySelector("pre.log") : document.getElementById("log-top");
+  log.hidden = false;
+  if (!SERVED){ log.textContent = "この画面はファイルで開いているので、ボタンでは動かせません。gomi フォルダで次を実行してください：\npython gomiappV3.1/tools/" + CMD[tool](code, year); return; }
+  document.querySelectorAll("button.ub").forEach(x => x.disabled = true);
+  log.textContent = "";
+  try {
+    const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({tool, code, year})});
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    for (;;){ const {done, value} = await rd.read(); if (done) break; log.textContent += dec.decode(value, {stream:true}); log.scrollTop = log.scrollHeight; }
+    if (tool === "status" && r.ok && /うまくいきました/.test(log.textContent)) location.reload();
+    else if (r.ok && tool !== "list" && tool !== "check") log.textContent += "\n状況一覧に反映するには、いちばん上の「状況一覧を作り直す」を押してください。";
+  } catch(err){ log.textContent += "\n動かせませんでした：" + err + "（admin.py が止まっていないか見てください）"; }
+  document.querySelectorAll("button.ub").forEach(x => x.disabled = false);
+});
 """
 
 COLS = [("cal", "収集日"), ("items", "品目"), ("city", "設定"), ("geo", "今いる場所"), ("addr", "住所"), ("src", "元データ"), ("tools", "道具"), ("lic", "商用利用"), ("next", "次のカレンダー（市のサイト）")]
@@ -681,7 +709,25 @@ def detail_html(m, row, notes, checks, cols):
             f'<h4>人がやること（README.md）</h4><ul class="chk">{td}</ul>'
             f'<h4>直すこと・気をつけること</h4><ul class="chk">{ns}</ul>'
             f'<p class="muted">道具：<code>gomiappV3.1/tools/munis/{h(m.path)}/</code>　データ：<code>gomiappV3.1/data/{h(m.path)}/</code>　'
-            f'元データ：<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/</code></p></div></details></li>')
+            f'元データ：<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/</code></p>'
+            + upd_html(m) + '</div></details></li>')
+
+
+UPD = [("list", "市のサイトを見る", "新しい年度のカレンダーが出ているか調べる（保存しない）"),
+       ("download", "取ってくる", "市のサイトから元データ/に保存する"),
+       ("update", "作り直す", "元データからアプリのデータを作り直す"),
+       ("opendata", "オープンデータを最新に", "カタログから最新を取ってきて作り直す"),
+       ("check", "自動チェック", "check_muni.py")]
+
+
+def upd_html(m):
+    """自治体ごとの更新ボタン（admin.py で開いたときに動く）"""
+    od = bool(m.module("opendata"))
+    btns = "".join(f'<button type="button" class="ub" data-tool="{t}" title="{h(d)}">{h(lb)}</button>'
+                   for t, lb, d in UPD if t != "opendata" or od)
+    return (f'<h4>更新</h4><div class="upd" data-code="{h(m.code)}"><p class="ubs">{btns}</p>'
+            '<p class="muted">年度は、いちばん上でえらんだ年度。ふつうは「市のサイトを見る」→「取ってくる」→「作り直す」→「自動チェック」の順。</p>'
+            '<pre class="log" hidden></pre></div>')
 
 
 def main():
@@ -728,7 +774,11 @@ def main():
   <div><b>{reiwa(hol['year'])}</b><span>祝日のデータ</span></div>
   {f'<div><b>{sum(1 for _, st in prog.values() if st in ("done", "fix"))}/{len(prog):,}</b><span><a href="#progress">全国の進み具合</a></span></div>' if prog else ''}
 </div>
-<p class="tools"><button type="button" onclick="secAll(true)">すべて開く</button><button type="button" onclick="secAll(false)">すべて閉じる</button></p>
+<p class="tools"><button type="button" onclick="secAll(true)">すべて開く</button><button type="button" onclick="secAll(false)">すべて閉じる</button>
+<span class="sp"></span><label>更新する年度 <select id="fy">{''.join(f'<option value="{y}"{" selected" if y == now_fy else ""}>{reiwa(y)}（{y}年度）</option>' for y in (now_fy, now_fy + 1))}</select></label>
+<button type="button" class="ub" data-tool="status">状況一覧を作り直す</button></p>
+<p class="admin-off muted" hidden>更新ボタンを使うときは、<code>python gomiappV3.1/tools/admin.py</code> で開いてください（このパソコンの中だけで動きます）。今はボタンを押すと、動かすコマンドが出ます。</p>
+<pre class="log" id="log-top" hidden></pre>
 <details class="sec" id="s-table" open><summary><h2>自治体ごと</h2></summary>
 <p class="howto">都道府県をクリックすると、その県の自治体の表が出ます。</p>"""]
     # 県ごとに表が分かれても列がそろうように、列の幅を決めておく（単位 em）
