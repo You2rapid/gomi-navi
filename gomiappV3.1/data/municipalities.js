@@ -43,6 +43,20 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "yomi": "いわくにし"
   },
   {
+   "code": "35206",
+   "pref": "35",
+   "name": "防府市",
+   "slug": "hofu",
+   "yomi": "ほうふし"
+  },
+  {
+   "code": "35202",
+   "pref": "35",
+   "name": "宇部市",
+   "slug": "ube",
+   "yomi": "うべし"
+  },
+  {
    "code": "26100",
    "pref": "26",
    "name": "京都市",
