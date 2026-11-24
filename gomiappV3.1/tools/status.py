@@ -195,6 +195,18 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None, zips=
         note(WARN, "地図（e-Stat の KML）が元データにありません",
              f"<p>e-Stat（政府統計の総合窓口）の「境界データ」で、国勢調査の小地域（町丁・字等）の {m.code} の KML を保存し、"
              f"<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/地図/r2ka{m.code}.kml</code> に置きます。</p>")
+    # 古い年度の元データ：新しい年度を公開して2か月たったら（その年度の6月から）、前の年度のフォルダは消してよい（tools/AGENT.md「毎年の更新」）。
+    # 収集日のデータ（calendar.js）は GitHub の履歴に残る。冊子・地図・オープンデータは年度に関係なく使うので消さない
+    limit = cal_y if today >= dt.date(cal_y, 6, 1) else cal_y - 1
+    old = [y for y in years if y < limit]
+    if old:
+        sizes = {y: sum(f.stat().st_size for f in m.year_dir(y).rglob("*") if f.is_file()) for y in old}
+        mb = sum(sizes.values()) / 1e6
+        note(WARN, f"消してよい古い年度の元データがあります（{'・'.join(f'{y}年度' for y in old)}、{mb:,.0f}MB）",
+             f"<p>今の年度（{cal_y}年度）のデータを公開して2か月たったので、前の年度の市の資料は使いません。"
+             "アプリの収集日は GitHub の履歴に残っているので、あとからでも分かります。</p>"
+             + steps(*[f"<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/{y}年度/</code>（{sizes[y] / 1e6:,.0f}MB）をエクスプローラーで消す" for y in old],
+                     "冊子（分別の冊子/）・地図（地図/）・オープンデータ（オープンデータ/）は消さない"))
     row["src"] = (lv, "・".join(f"{y}" for y in years) + "年度" if years else "なし",
                   f"冊子 {len(books)}・地図 {'あり' if kml else 'なし'}" + (f"・{next_y}年度そろっている" if next_ok else ""))
 
