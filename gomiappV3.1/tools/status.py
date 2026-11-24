@@ -580,7 +580,7 @@ details.pg>summary::before{content:"▸";display:inline-block;width:1.1em;color:
 details.pg[open]>summary::before{content:"▾"}
 details.pg .cnt{color:var(--muted);font-size:13px;margin:0 10px}
 details.pg .wrap{border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}
-details.pg td.name{width:1%}
+table.pt{table-layout:fixed;min-width:0} table.pt th,table.pt td{overflow-wrap:anywhere}
 p.tools{margin:12px 0 0;display:flex;gap:6px} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 """
 
@@ -731,7 +731,12 @@ def main():
 <p class="tools"><button type="button" onclick="secAll(true)">すべて開く</button><button type="button" onclick="secAll(false)">すべて閉じる</button></p>
 <details class="sec" id="s-table" open><summary><h2>自治体ごと</h2></summary>
 <p class="howto">都道府県をクリックすると、その県の自治体の表が出ます。</p>"""]
-    head = f"<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead>"
+    # 県ごとに表が分かれても列がそろうように、列の幅を決めておく（単位 em）
+    width = {"name": 7.5, "cal": 8, "items": 8, "city": 6.5, "geo": 8.5, "addr": 13, "src": 7, "tools": 6, "lic": 13, "next": 12}
+    ws = [width["name"]] + [width.get(k, 9) for k, _ in cols]
+    head = (f'<colgroup>{"".join(f"<col style={chr(34)}width:{w}em{chr(34)}>" for w in ws)}</colgroup>'
+            f"<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead>")
+    tbl = f'<table class="pt" style="width:{sum(ws)}em">'
     groups = {}
     for r in rows:
         groups.setdefault(r[0].pref, []).append(r)
@@ -740,7 +745,7 @@ def main():
         nw = sum(1 for _, row, _ in grp for k, _ in cols if k in row and row[k][0] == WARN)
         tags = (f'<span class="tag bad">赤 {nb}</span>' if nb else "") + (f'<span class="tag warn">黄 {nw}</span>' if nw else "")             or '<span class="tag ok">問題なし</span>'
         body.append(f'<details class="pg" id="t-{h(pcode)}"><summary><b>{h(pcode)} {h(grp[0][0].pref_name)}</b>'
-                    f'<span class="cnt">{len(grp)} 自治体</span>{tags}</summary><div class="wrap"><table>{head}<tbody>')
+                    f'<span class="cnt">{len(grp)} 自治体</span>{tags}</summary><div class="wrap">{tbl}{head}<tbody>')
         for m, row, notes in grp:
             keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
             cells = "".join(
