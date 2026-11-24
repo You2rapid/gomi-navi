@@ -66,8 +66,15 @@ gomiData("35202", "city", /*CITY-START*/{
   "紙容器": "ひもで十字にしばる"
  },
  "darkInk": [
+  "燃やせる",
+  "プラ",
+  "不燃",
+  "月1可燃",
+  "危険",
+  "びん缶",
   "ペット",
-  "紙容器"
+  "紙容器",
+  "古紙"
  ],
  "regions": [],
  "regionSuffix": "",
@@ -84,8 +91,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "燃やせる": {
    "name": "月・水・金の燃やせるごみ",
    "color": [
-    "#e0352b",
-    "#f0605a"
+    "#ffccff",
+    "#ffccff"
    ],
    "bag": "市の指定袋",
    "page": "32",
@@ -107,8 +114,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "月1可燃": {
    "name": "月1回収集の燃やせるごみ",
    "color": [
-    "#c0662a",
-    "#e08a4f"
+    "#ffcccc",
+    "#ffcccc"
    ],
    "bag": "無色透明の袋",
    "page": "32",
@@ -135,8 +142,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "不燃": {
    "name": "燃やせないごみ",
    "color": [
-    "#3b6fb6",
-    "#6c9be0"
+    "#fabf8f",
+    "#fabf8f"
    ],
    "bag": "無色透明の袋",
    "page": "32",
@@ -163,8 +170,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "びん缶": {
    "name": "びん・缶",
    "color": [
-    "#2e9e4f",
-    "#3fbf6a"
+    "#99ffcc",
+    "#99ffcc"
    ],
    "bag": "無色透明の袋",
    "page": "31",
@@ -188,8 +195,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "ペット": {
    "name": "ペットボトル",
    "color": [
-    "#8fd19e",
-    "#9fdcae"
+    "#d2fcf5",
+    "#d2fcf5"
    ],
    "bag": "無色透明の袋",
    "page": "31",
@@ -210,8 +217,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "危険": {
    "name": "危険ごみ",
    "color": [
-    "#d6403a",
-    "#ef6f69"
+    "#ffff00",
+    "#ffff00"
    ],
    "bag": "無色透明の袋（種類ごとに別の袋）",
    "page": "32",
@@ -237,8 +244,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "プラ": {
    "name": "プラスチック製容器包装",
    "color": [
-    "#f5dc00",
-    "#f0d531"
+    "#ccffcc",
+    "#ccffcc"
    ],
    "bag": "無色透明の袋",
    "page": "31",
@@ -260,8 +267,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "古紙": {
    "name": "古紙",
    "color": [
-    "#8a6d3b",
-    "#b8955a"
+    "#ffcc99",
+    "#ffcc99"
    ],
    "bag": "ひもで十字にしばる",
    "page": "31",
@@ -281,8 +288,8 @@ gomiData("35202", "city", /*CITY-START*/{
   "紙容器": {
    "name": "紙製容器包装",
    "color": [
-    "#c9a66b",
-    "#d9b97f"
+    "#ffffcc",
+    "#ffffcc"
    ],
    "bag": "ひもで十字にしばる",
    "page": "31",
