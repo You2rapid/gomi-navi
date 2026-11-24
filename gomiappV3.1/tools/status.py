@@ -524,7 +524,7 @@ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;verti
 th{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap;background:var(--surface);position:sticky;top:0}
 tr:last-child td{border-bottom:0}
 td.pref{color:var(--muted);font-size:13px;white-space:nowrap}
-td.name b{display:block} td.name small{color:var(--muted)}
+td.name{white-space:nowrap} td.name small{color:var(--muted);font-size:12px}
 .c{white-space:nowrap}
 .c b{display:inline-block;padding:1px 8px;border-radius:999px;font-size:13px;font-weight:600}
 .c small{display:block;color:var(--muted);font-size:12px;white-space:normal}
@@ -566,10 +566,22 @@ ul.munis li small{margin-left:3px;font-size:10.5px}
 ul.munis li.done{background:var(--ok-bg);color:var(--ok);border-color:transparent} ul.munis li.fix{background:var(--bad-bg);color:var(--bad);border-color:transparent}
 ul.munis li.wip{background:var(--warn-bg);color:var(--warn);border-color:transparent} ul.munis a{color:inherit}
 :target{scroll-margin-top:12px}
+details.sec{margin:14px 0 0;border-top:1px solid var(--line);padding-top:4px}
+details.sec>summary{cursor:pointer;list-style:none}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary h2{display:inline-block;margin:10px 0 8px}
+details.sec>summary h2::before{content:"▸";display:inline-block;width:1.1em;color:var(--accent)}
+details.sec[open]>summary h2::before{content:"▾"}
+details.sec>summary h2 .cnt{color:var(--muted);font-size:13px;font-weight:400;margin-left:10px}
+p.tools{margin:12px 0 0;display:flex;gap:6px} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 """
 
 JS = """
-function openHash(){ const el = location.hash && document.getElementById(location.hash.slice(1)); if (el){ const d = el.querySelector("details"); if (d) d.open = true; el.scrollIntoView({block:"start"}); } }
+function openHash(){ const el = location.hash && document.getElementById(location.hash.slice(1)); if (el){
+  for (let p = el.parentElement; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true;
+  const d = el.querySelector("details"); if (d) d.open = true; el.scrollIntoView({block:"start"}); } }
+function secAll(o){ document.querySelectorAll("details.sec").forEach(d => d.open = o); }
+document.addEventListener("click", e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute("href") === location.hash) openHash(); });
 window.addEventListener("hashchange", openHash); openHash();
 """
 
@@ -683,7 +695,7 @@ def main():
         if f.name != "index.json":
             zips[f.name[:2]] = json.loads(f.read_text(encoding="utf-8"))
     rows, all_notes = [], []
-    for m in M.munis():
+    for m in sorted(M.munis(), key=lambda m: m.code):   # 自治体コードの番号順
         print("調べています:", m)
         row, notes = check_muni(m, now_fy, hol["year"], geo_cities, web, today, zips)
         rows.append((m, row, notes))
@@ -708,9 +720,10 @@ def main():
   <div><b>{reiwa(hol['year'])}</b><span>祝日のデータ</span></div>
   {f'<div><b>{sum(1 for _, st in prog.values() if st in ("done", "fix"))}/{len(prog):,}</b><span><a href="#progress">全国の進み具合</a></span></div>' if prog else ''}
 </div>
-<h2>自治体ごと</h2>
+<p class="tools"><button type="button" onclick="secAll(true)">すべて開く</button><button type="button" onclick="secAll(false)">すべて閉じる</button></p>
+<details class="sec" id="s-table" open><summary><h2>自治体ごと</h2></summary>
 <div class="wrap"><table>
-<thead><tr><th>都道府県</th><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead><tbody>"""]
+<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead><tbody>"""]
     for m, row, notes in rows:
         keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
         cells = "".join(
@@ -718,13 +731,15 @@ def main():
              if f"{k}-{m.code}" in keys else
              f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
             for k, _ in cols)
-        body.append(f'<tr><td class="pref">{h(m.pref)} {h(m.pref_name)}</td><td class="name"><a href="#m-{h(m.code)}"><b>{h(m.name)}</b></a><small>{h(m.code)}</small></td>{cells}</tr>')
-    body.append("</tbody></table></div>")
-    body.append('<h2>自治体ごとのくわしく</h2><p class="howto">自治体の名前をクリックすると、表の中身・自動チェックの結果・人がやること（README.md）が出ます。</p><ul class="notes">'
-                + "".join(detail_html(m, row, notes, checks, cols) for m, row, notes in rows) + "</ul>")
+        body.append(f'<tr><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> {h(m.pref_name)} <b>{h(m.name)}</b></a></td>{cells}</tr>')
+    body.append("</tbody></table></div></details>")
+    body.append('<details class="sec" id="s-detail"><summary><h2>自治体ごとのくわしく</h2></summary><p class="howto">自治体の名前をクリックすると、表の中身・自動チェックの結果・人がやること（README.md）が出ます。</p><ul class="notes">'
+                + "".join(detail_html(m, row, notes, checks, cols) for m, row, notes in rows) + "</ul></details>")
     if prog:
-        body.append(progress_html(lg_prefs, prog))
-    body.append("<h2>直すこと・気をつけること</h2>")
+        body.append('<details class="sec" id="s-progress">' + progress_html(lg_prefs, prog).replace(
+            '<h2 id="progress">全国の進み具合</h2>', '<summary id="progress"><h2>全国の進み具合</h2></summary>', 1) + "</details>")
+    body.append('<details class="sec" id="s-notes"><summary><h2>直すこと・気をつけること'
+                + f'<span class="cnt">直す {n_bad}・注意 {n_warn}</span></h2></summary>')
     if all_notes:
         order = {BAD: 0, WARN: 1, INFO: 2}
         body.append('<p class="howto">それぞれをクリックすると、どうすればよいかが出ます。</p><ul class="notes">' + "".join(
@@ -734,14 +749,15 @@ def main():
             for lv, m, t, how, key in sorted(all_notes, key=lambda x: (order[x[0]], x[1].code))) + "</ul>")
     else:
         body.append('<p class="howto">ありません。</p>')
-    body.append(f"""<h2>見かた</h2>
+    body.append("</details>")
+    body.append(f"""<details class="sec" id="s-howto"><summary><h2>見かた</h2></summary>
 <p class="howto">緑＝問題なし、黄＝気をつけること、赤＝直すこと。
 収集日は毎年4月に <code>download_sources.py</code> → <code>update_year.py</code> で更新します（くわしくは <code>gomiappV3.1/tools/README.md</code>）。
 自治体ごとの注意は <code>gomiappV3.1/tools/munis/&lt;県&gt;/&lt;自治体&gt;/README.md</code> にあります。<br>
 商用利用は <code>license.json</code> から出しています（可・出典表示で可＝緑、要確認・許可を問い合わせ中＝黄、要許可＝赤）。「オープンデータ：」は、そのデータをオープンデータから作っているもの（<code>opendata.py</code>・<code>calendar.py</code> から）。市のサイトの利用条件のまとめで、法律の判断ではありません。<br>
 住所は、郵便番号一覧の町名（市の正式な町名。<code>元データ/全国/郵便番号/県別/</code>、<code>tools/build_zip.py</code> で作る）とくらべたもの。
 「町 a/b」は、その市の正式な町 b のうち、アプリで収集日の地区が見つかる町が a（町名が同じか、「今いる場所から探す」の町→地区の対応にある）。
-「参考」は数えていない知っておくこと（山の中の字など、直さなくてよいことが多い）。</p>
+「参考」は数えていない知っておくこと（山の中の字など、直さなくてよいことが多い）。</p></details>
 </main>""")
     page = f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>状況一覧</title><style>{CSS}</style></head><body>{"".join(body)}<script>{JS}</script></body></html>'
     out = M.SOURCES / "状況一覧.html"
