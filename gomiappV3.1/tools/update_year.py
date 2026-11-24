@@ -5,6 +5,9 @@
   python gomiappV3.1/tools/update_year.py 2027               ← 元データから gomiappV3.1/data/ と gomiappV3.1/geo/ を作り直す（すべての自治体）
   python gomiappV3.1/tools/update_year.py 2027 35215 光市    ← 自治体を指定（自治体コードか名前）
   --check   ファイルがそろっているかだけ調べる（何も書きかえない）
+  --preview 試すだけ：カレンダーを読み取って、地区・日程の数と、今のデータとのちがいを出す。
+            アプリのデータ（data/・geo/）は書きかえない（元データ/…/<年度>年度/calendar_preview.json に保存）。
+            アプリには1年度分しか入らないので、新しい年度のカレンダーが早く出たときは、まずこれで確かめる
 
 やること:
   1. 元データ/<県>/<自治体>/<年度>年度/ に必要なファイルがそろっているか確かめる
@@ -45,6 +48,58 @@ def holidays(year, csv_path):
     return sorted(days), year_end
 
 
+def preview(year, targets):
+    """新しい年度のカレンダーを読み取れるか試す（アプリのデータは変えない）"""
+    import json
+    failed = []
+    for m, mod in targets:
+        print(f"\n== {m}：{M.nendo(year)}を試します")
+        try:
+            data = mod.make_calendar(m.year_dir(year), year)
+            if data["year"] != year:
+                raise ValueError(f"年度がちがいます（{data['year']}）")
+            if not data.get("schedules") or not data.get("areas"):
+                raise ValueError("日程か地区が空です")
+        except (Exception, SystemExit) as e:
+            if isinstance(e, Exception):
+                traceback.print_exc()
+            else:
+                print(e)
+            failed.append((m, isinstance(e, Exception)))
+            continue
+        out = m.year_dir(year) / "calendar_preview.json"
+        out.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        days = sorted(d for s in data["schedules"].values() for d in s["days"])
+        cnt = {}
+        for s in data["schedules"].values():
+            for cats in s["days"].values():
+                for c in cats:
+                    cnt[c] = cnt.get(c, 0) + 1
+        print(f"読み取れました：地区 {len(data['areas'])}・日程 {len(data['schedules'])}・収集日 {days[0]} 〜 {days[-1]}")
+        print("区分ごとの日数（すべての日程の合計）：" + "、".join(f"{k} {v}" for k, v in sorted(cnt.items(), key=lambda x: -x[1])))
+        if not (days[0].startswith(f"{year}-04") and days[-1].startswith(f"{year + 1}-03")):
+            print(f"!! 4月〜3月の1年分になっていないようです。市のカレンダーと見くらべてください")
+        try:
+            now = m.read("calendar")
+            a0 = {(a["n"], a.get("r", "")) for a in now["areas"]}
+            a1 = {(a["n"], a.get("r", "")) for a in data["areas"]}
+            print(f"今のデータ（{M.nendo(now['year'])}）とくらべて：地区 {len(a0)} → {len(a1)}")
+            for lb, xs in (("なくなった地区", a0 - a1), ("ふえた地区", a1 - a0)):
+                if xs:
+                    print(f"  {lb} {len(xs)}：" + "、".join(f"{r} {n}".strip() for n, r in sorted(xs)[:30]) + (" …" if len(xs) > 30 else ""))
+            if a0 == a1:
+                print("  地区の名前は同じです")
+        except Exception as e:  # noqa: BLE001
+            print("今のデータとくらべられませんでした：", e)
+        print("（アプリのデータは変えていません。保存先：", out.relative_to(M.ROOT), "）")
+    if failed:
+        print("\n!! 読み取れなかった自治体:")
+        for m, bug in failed:
+            print("   ", m, f"→ 読み取りの道具の不具合かもしれません（tools/munis/{m.path}/calendar.py）" if bug
+                  else "→ 上の理由で、まだ作れません（市が新しい年度の資料を出しきっていないなど）。出てからもう一度試す")
+        raise SystemExit(1)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
@@ -71,6 +126,8 @@ def main():
     print("ファイルはそろっています。")
     if "--check" in sys.argv:
         return
+    if "--preview" in sys.argv:
+        return preview(year, targets)
 
     # 2. 祝日
     hol, ye = holidays(year, M.holiday_csv(year))

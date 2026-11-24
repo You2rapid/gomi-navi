@@ -207,8 +207,8 @@ def check_muni(m, now_fy, holidays_year, geo_cities, web=None, today=None, zips=
              "アプリの収集日は GitHub の履歴に残っているので、あとからでも分かります。</p>"
              + steps(*[f"<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/{y}年度/</code>（{sizes[y] / 1e6:,.0f}MB）をエクスプローラーで消す" for y in old],
                      "冊子（分別の冊子/）・地図（地図/）・オープンデータ（オープンデータ/）は消さない"))
-    row["src"] = (lv, "・".join(f"{y}" for y in years) + "年度" if years else "なし",
-                  f"冊子 {len(books)}・地図 {'あり' if kml else 'なし'}" + (f"・{next_y}年度そろっている" if next_ok else ""))
+    row["src"] = (lv, "令和" + "・".join(f"{y - 2018}" for y in years) + "年度" if years else "なし",
+                  f"冊子 {len(books)}・地図 {'あり' if kml else 'なし'}" + (f"・{reiwa(next_y)}のファイルあり" if next_ok else ""))
 
     # ---- 道具 ----
     tools = [n for n in ("calendar.py", "geo.py", "README.md") if (m.tool_dir / n).exists()]
@@ -585,7 +585,9 @@ p.tools{margin:12px 0 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center} 
 p.tools label{font-size:13px;color:var(--muted)} p.tools select{font-size:13px;margin-left:4px}
 .ubs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
 button.ub{border:1px solid var(--accent);background:var(--surface);color:var(--accent);font-weight:700;border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
-button.ub:disabled{opacity:.5;cursor:wait}
+button.ub:disabled{opacity:.45;cursor:not-allowed}
+td.c button.ub{display:block;margin-top:6px;padding:2px 9px;font-size:12px;white-space:nowrap}
+tr.logrow td{background:var(--bg)} tr.logrow pre.log{margin:0}
 pre.log{background:#111;color:#dfe;font-size:12px;line-height:1.5;padding:8px 10px;border-radius:8px;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 """
 
@@ -596,28 +598,30 @@ function openHash(){ const el = location.hash && document.getElementById(locatio
 function secAll(o){ document.querySelectorAll("details.sec, details.pg").forEach(d => d.open = o); }
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute("href") === location.hash) openHash(); });
 window.addEventListener("hashchange", openHash); openHash();
-// 更新ボタン：admin.py（http://127.0.0.1:8765/）で開いたときは道具を動かし、ファイルで開いたときはコマンドを出す
+// 更新ボタン：admin.py（http://127.0.0.1:8766/）で開いたときは道具を動かし、ファイルで開いたときはコマンドを出す
 const SERVED = location.protocol.startsWith("http");
 if (!SERVED) document.querySelector(".admin-off").hidden = false;
-const CMD = {status: () => "status.py", list: (c, y) => `download_sources.py ${y} ${c} --list`, download: (c, y) => `download_sources.py ${y} ${c}`,
-  update: (c, y) => `update_year.py ${y} ${c}`, opendata: c => `update_opendata.py ${c}`, check: c => `check_muni.py ${c}`};
+const NY = new Date().getMonth() >= 3 ? new Date().getFullYear() + 1 : new Date().getFullYear();   // 次の年度
+const CMD = {status: () => ["status.py"], latest: c => [`download_sources.py ${NY} ${c} --list`],
+  trynext: c => [`download_sources.py ${NY} ${c}`, `update_year.py ${NY} ${c} --preview`],
+  switch: () => [`download_sources.py ${NY}`, `update_year.py ${NY}`, "check_muni.py", "status.py"]};
 document.addEventListener("click", async e => {
-  const b = e.target.closest("button.ub"); if (!b) return;
-  const box = b.closest(".upd"), code = box ? box.dataset.code : null, tool = b.dataset.tool;
-  const year = +document.getElementById("fy").value;
-  const log = box ? box.querySelector("pre.log") : document.getElementById("log-top");
-  log.hidden = false;
-  if (!SERVED){ log.textContent = "この画面はファイルで開いているので、ボタンでは動かせません。gomi フォルダで次を実行してください：\npython gomiappV3.1/tools/" + CMD[tool](code, year); return; }
-  document.querySelectorAll("button.ub").forEach(x => x.disabled = true);
+  const b = e.target.closest("button.ub"); if (!b || b.disabled) return;
+  const tr = b.closest("tr[data-code]"), code = tr ? tr.dataset.code : null, tool = b.dataset.tool;
+  const logrow = tr ? tr.nextElementSibling : null;
+  const log = logrow ? logrow.querySelector("pre.log") : document.getElementById("log-top");
+  if (logrow) logrow.hidden = false; else log.hidden = false;
+  if (!SERVED){ log.textContent = "この画面はファイルで開いているので、ボタンでは動かせません。gomi フォルダで次を順に実行してください：\n" + CMD[tool](code).map(c => "python gomiappV3.1/tools/" + c).join("\n"); return; }
+  const all = document.querySelectorAll("button.ub"), was = [...all].map(x => x.disabled);
+  all.forEach(x => x.disabled = true);
   log.textContent = "";
   try {
-    const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({tool, code, year})});
+    const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({tool, code})});
     const rd = r.body.getReader(), dec = new TextDecoder();
     for (;;){ const {done, value} = await rd.read(); if (done) break; log.textContent += dec.decode(value, {stream:true}); log.scrollTop = log.scrollHeight; }
-    if (tool === "status" && r.ok && /うまくいきました/.test(log.textContent)) location.reload();
-    else if (r.ok && tool !== "list" && tool !== "check") log.textContent += "\n状況一覧に反映するには、いちばん上の「状況一覧を作り直す」を押してください。";
+    if ((tool === "status" || tool === "switch") && r.ok && /うまくいきました/.test(log.textContent)) location.reload();
   } catch(err){ log.textContent += "\n動かせませんでした：" + err + "（admin.py が止まっていないか見てください）"; }
-  document.querySelectorAll("button.ub").forEach(x => x.disabled = false);
+  all.forEach((x, i) => x.disabled = was[i]);
 });
 """
 
@@ -710,24 +714,12 @@ def detail_html(m, row, notes, checks, cols):
             f'<h4>直すこと・気をつけること</h4><ul class="chk">{ns}</ul>'
             f'<p class="muted">道具：<code>gomiappV3.1/tools/munis/{h(m.path)}/</code>　データ：<code>gomiappV3.1/data/{h(m.path)}/</code>　'
             f'元データ：<code>元データ/{h(m.src_dir.relative_to(M.SOURCES).as_posix())}/</code></p>'
-            + upd_html(m) + '</div></details></li>')
+            '</div></details></li>')
 
 
-UPD = [("list", "市のサイトを見る", "新しい年度のカレンダーが出ているか調べる（保存しない）"),
-       ("download", "取ってくる", "市のサイトから元データ/に保存する"),
-       ("update", "作り直す", "元データからアプリのデータを作り直す"),
-       ("opendata", "オープンデータを最新に", "カタログから最新を取ってきて作り直す"),
-       ("check", "自動チェック", "check_muni.py")]
-
-
-def upd_html(m):
-    """自治体ごとの更新ボタン（admin.py で開いたときに動く）"""
-    od = bool(m.module("opendata"))
-    btns = "".join(f'<button type="button" class="ub" data-tool="{t}" title="{h(d)}">{h(lb)}</button>'
-                   for t, lb, d in UPD if t != "opendata" or od)
-    return (f'<h4>更新</h4><div class="upd" data-code="{h(m.code)}"><p class="ubs">{btns}</p>'
-            '<p class="muted">年度は、いちばん上でえらんだ年度。ふつうは「市のサイトを見る」→「取ってくる」→「作り直す」→「自動チェック」の順。</p>'
-            '<pre class="log" hidden></pre></div>')
+def act_btn(tool, label, tip):
+    """表の中の更新ボタン（admin.py で開いたときに動く）"""
+    return f'<button type="button" class="ub" data-tool="{tool}" title="{h(tip)}">{h(label)}</button>'
 
 
 def main():
@@ -775,14 +767,17 @@ def main():
   {f'<div><b>{sum(1 for _, st in prog.values() if st in ("done", "fix"))}/{len(prog):,}</b><span><a href="#progress">全国の進み具合</a></span></div>' if prog else ''}
 </div>
 <p class="tools"><button type="button" onclick="secAll(true)">すべて開く</button><button type="button" onclick="secAll(false)">すべて閉じる</button>
-<span class="sp"></span><label>更新する年度 <select id="fy">{''.join(f'<option value="{y}"{" selected" if y == now_fy else ""}>{reiwa(y)}（{y}年度）</option>' for y in (now_fy, now_fy + 1))}</select></label>
-<button type="button" class="ub" data-tool="status">状況一覧を作り直す</button></p>
-<p class="admin-off muted" hidden>更新ボタンを使うときは、<code>python gomiappV3.1/tools/admin.py</code> で開いてください（このパソコンの中だけで動きます）。今はボタンを押すと、動かすコマンドが出ます。</p>
+<span class="sp"></span>{act_btn("status", "状況一覧を作り直す", "status.py")}
+{act_btn("switch", f"{reiwa(now_fy + 1)}に切り替える（全部）", "全部の自治体の収集日を次の年度にする")
+ .replace("<button ", "<button disabled " if today < dt.date(now_fy + 1, 3, 1) else "<button ")}</p>
+<p class="muted">表の「元データ」の<b>最新をチェック</b>で、市のサイトに{reiwa(now_fy + 1)}のカレンダーが出ているかを見て、「道具」の<b>{reiwa(now_fy + 1)}を試す</b>で、取ってきて読み取れるかを試します（アプリのデータは変えません）。
+アプリには1年度分しか入らないので、全部の切り替えは {now_fy + 1}年3月1日から押せます。</p>
+<p class="admin-off muted" hidden>ボタンを使うときは、<code>python gomiappV3.1/tools/admin.py</code> で開いてください（このパソコンの中だけで動きます）。今はボタンを押すと、動かすコマンドが出ます。</p>
 <pre class="log" id="log-top" hidden></pre>
 <details class="sec" id="s-table" open><summary><h2>自治体ごと</h2></summary>
 <p class="howto">都道府県をクリックすると、その県の自治体の表が出ます。</p>"""]
     # 県ごとに表が分かれても列がそろうように、列の幅を決めておく（単位 em）
-    width = {"name": 7.5, "cal": 8, "items": 8, "city": 6.5, "geo": 8.5, "addr": 13, "src": 7, "tools": 6, "lic": 13, "next": 12}
+    width = {"name": 7.5, "cal": 8, "items": 8, "city": 6.5, "geo": 8.5, "addr": 12, "src": 8.5, "tools": 8, "lic": 12, "next": 12}
     ws = [width["name"]] + [width.get(k, 9) for k, _ in cols]
     head = (f'<colgroup>{"".join(f"<col style={chr(34)}width:{w}em{chr(34)}>" for w in ws)}</colgroup>'
             f"<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead>")
@@ -798,12 +793,15 @@ def main():
                     f'<span class="cnt">{len(grp)} 自治体</span>{tags}</summary><div class="wrap">{tbl}{head}<tbody>')
         for m, row, notes in grp:
             keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
+            act = {"src": act_btn("latest", "最新をチェック", f"市のサイトに{reiwa(now_fy + 1)}のカレンダーが出ているか見る（保存しない）"),
+                   "tools": act_btn("trynext", f"{reiwa(now_fy + 1)}を試す", "取ってきて、読み取れるか試す（アプリのデータは変えない）")}
             cells = "".join(
-                (f'<td class="c {row[k][0]}"><a class="cell" href="#{k}-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a></td>'
+                (f'<td class="c {row[k][0]}"><a class="cell" href="#{k}-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a>{act.get(k, "")}</td>'
                  if f"{k}-{m.code}" in keys else
-                 f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
+                 f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small>{act.get(k, "")}</td>') if k in row else "<td></td>"
                 for k, _ in cols)
-            body.append(f'<tr><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> <b>{h(m.name)}</b></a></td>{cells}</tr>')
+            body.append(f'<tr data-code="{h(m.code)}"><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> <b>{h(m.name)}</b></a></td>{cells}</tr>'
+                        f'<tr class="logrow" hidden><td colspan="{len(cols) + 1}"><pre class="log"></pre></td></tr>')
         body.append("</tbody></table></div></details>")
     body.append("</details>")
     body.append('<details class="sec" id="s-detail"><summary><h2>自治体ごとのくわしく</h2></summary><p class="howto">自治体の名前をクリックすると、表の中身・自動チェックの結果・人がやること（README.md）が出ます。</p><ul class="notes">'
