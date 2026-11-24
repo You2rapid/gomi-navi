@@ -573,6 +573,14 @@ details.sec>summary h2{display:inline-block;margin:10px 0 8px}
 details.sec>summary h2::before{content:"▸";display:inline-block;width:1.1em;color:var(--accent)}
 details.sec[open]>summary h2::before{content:"▾"}
 details.sec>summary h2 .cnt{color:var(--muted);font-size:13px;font-weight:400;margin-left:10px}
+details.pg{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin:0 0 8px}
+details.pg>summary{cursor:pointer;padding:8px 12px;list-style:none}
+details.pg>summary::-webkit-details-marker{display:none}
+details.pg>summary::before{content:"▸";display:inline-block;width:1.1em;color:var(--accent)}
+details.pg[open]>summary::before{content:"▾"}
+details.pg .cnt{color:var(--muted);font-size:13px;margin:0 10px}
+details.pg .wrap{border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}
+details.pg td.name{width:1%}
 p.tools{margin:12px 0 0;display:flex;gap:6px} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 """
 
@@ -580,7 +588,7 @@ JS = """
 function openHash(){ const el = location.hash && document.getElementById(location.hash.slice(1)); if (el){
   for (let p = el.parentElement; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true;
   const d = el.querySelector("details"); if (d) d.open = true; el.scrollIntoView({block:"start"}); } }
-function secAll(o){ document.querySelectorAll("details.sec").forEach(d => d.open = o); }
+function secAll(o){ document.querySelectorAll("details.sec, details.pg").forEach(d => d.open = o); }
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute("href") === location.hash) openHash(); });
 window.addEventListener("hashchange", openHash); openHash();
 """
@@ -722,17 +730,27 @@ def main():
 </div>
 <p class="tools"><button type="button" onclick="secAll(true)">すべて開く</button><button type="button" onclick="secAll(false)">すべて閉じる</button></p>
 <details class="sec" id="s-table" open><summary><h2>自治体ごと</h2></summary>
-<div class="wrap"><table>
-<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead><tbody>"""]
-    for m, row, notes in rows:
-        keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
-        cells = "".join(
-            (f'<td class="c {row[k][0]}"><a class="cell" href="#{k}-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a></td>'
-             if f"{k}-{m.code}" in keys else
-             f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
-            for k, _ in cols)
-        body.append(f'<tr><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> {h(m.pref_name)} <b>{h(m.name)}</b></a></td>{cells}</tr>')
-    body.append("</tbody></table></div></details>")
+<p class="howto">都道府県をクリックすると、その県の自治体の表が出ます。</p>"""]
+    head = f"<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead>"
+    groups = {}
+    for r in rows:
+        groups.setdefault(r[0].pref, []).append(r)
+    for pcode, grp in sorted(groups.items()):
+        nb = sum(1 for _, row, _ in grp for k, _ in cols if k in row and row[k][0] == BAD)
+        nw = sum(1 for _, row, _ in grp for k, _ in cols if k in row and row[k][0] == WARN)
+        tags = (f'<span class="tag bad">赤 {nb}</span>' if nb else "") + (f'<span class="tag warn">黄 {nw}</span>' if nw else "")             or '<span class="tag ok">問題なし</span>'
+        body.append(f'<details class="pg" id="t-{h(pcode)}"><summary><b>{h(pcode)} {h(grp[0][0].pref_name)}</b>'
+                    f'<span class="cnt">{len(grp)} 自治体</span>{tags}</summary><div class="wrap"><table>{head}<tbody>')
+        for m, row, notes in grp:
+            keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
+            cells = "".join(
+                (f'<td class="c {row[k][0]}"><a class="cell" href="#{k}-{m.code}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></a></td>'
+                 if f"{k}-{m.code}" in keys else
+                 f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small></td>') if k in row else "<td></td>"
+                for k, _ in cols)
+            body.append(f'<tr><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> <b>{h(m.name)}</b></a></td>{cells}</tr>')
+        body.append("</tbody></table></div></details>")
+    body.append("</details>")
     body.append('<details class="sec" id="s-detail"><summary><h2>自治体ごとのくわしく</h2></summary><p class="howto">自治体の名前をクリックすると、表の中身・自動チェックの結果・人がやること（README.md）が出ます。</p><ul class="notes">'
                 + "".join(detail_html(m, row, notes, checks, cols) for m, row, notes in rows) + "</ul></details>")
     if prog:
