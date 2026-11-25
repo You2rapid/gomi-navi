@@ -211,6 +211,7 @@ a{color:var(--accent)}
 .cal .d .n{font-size:13px;font-weight:700;padding-left:3px;line-height:1.3}
 .cal .d .tag{font-size:10.5px;padding:2px 0;border-radius:4px;letter-spacing:-.02em}
 .cal .d .mv{font-size:9px;font-weight:800;text-align:center;color:var(--muted);line-height:1}
+.cal .d .mv.und{color:#b26a00}
 @media (min-width:600px){.cal .d{min-height:78px}.cal .d .tag{font-size:12px}}
 .legend{display:flex;flex-wrap:wrap;gap:6px 10px;margin:10px 0 0;font-size:12.5px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
@@ -861,11 +862,14 @@ function usuallyCollected(d){
   }
   return usualWd[s][d.getDay()] >= 0.6;
 }
+// 年末年始の収集日が、まだ市から発表されていない日（calendar.js の yearEnd.tentative）。「収集なし」と言い切らない
+const undecided = d => { const ye = CAL && CAL.yearEnd, k = ymd(d); return !!(ye && ye.tentative && ye.off && k >= ye.off[0] && k <= ye.off[1]); };
 function notices(){
-  const off = [], moved = [];
+  const off = [], moved = [], und = [];
   for (let i = 0; i < 14; i++){
     const d = addDays(today0(), i), k = ymd(d);
     if (!inRange(d)) break;
+    if (undecided(d)){ und.push(d); continue; }
     if (!catsOn(d).length && (HOLIDAYS.has(k) || YEAR_END.has(k)) && usuallyCollected(d)) off.push(d);
     if (movedOn(d).length) moved.push(d);
   }
@@ -884,6 +888,7 @@ function notices(){
   });
   flush();
   moved.forEach(d => out.push(`<b>${md(d)}</b> は ${movedOn(d).map(c => esc(LONG[c])).join("・")} の振替日です`));
+  if (und.length) out.push(`<b>${und.length > 1 ? `${md(und[0])}〜${md(und[und.length-1])}` : md(und[0])}</b> の年末年始の収集日は、まだ市から発表されていません（市の広報・ホームページで確かめてください）`);
   return out;
 }
 const catsOn = d => (sched().days[ymd(d)] || []).slice().sort((a,b) => CAL_ORDER.indexOf(a) - CAL_ORDER.indexOf(b));
@@ -932,7 +937,7 @@ function renderCal(){
       return `<button class="day-card${i === 0 ? " today" : ""}" data-day="${ymd(d)}">
         <div class="when"><b>${i === 0 ? "きょう" : "あした"}</b><span>${md(d)}</span>${em ? `<em>${em}</em>` : ""}</div>
         ${cats.length ? `<div class="big">${cats.map(c => `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}"><span class="tn">${esc(LONG[c])}</span>${mv.includes(c) ? `<span class="moved">振替</span>` : ""}<small>${esc(BAG[c])}</small></span>`).join("")}</div>`
-          : `<div class="none">収集はありません</div>`}
+          : undecided(d) ? `<div class="none">年末年始の収集日は未定です（市の発表待ち）</div>` : `<div class="none">収集はありません</div>`}
       </button>`;
     }).join("") + `</div>`;
   }
@@ -942,7 +947,9 @@ function renderCal(){
     .sort((a, b) => (a[1] || Infinity) - (b[1] || Infinity));
   html += `<div class="card"><h2>つぎの収集日</h2><ul class="next-list">` + nexts.map(([c, d]) => {
     const when = d ? untilText(d) : "";
-    return `<li>${tag(c)}<span class="dt">${d ? md(d) : "―"}<span class="rule">${esc(sched().rules[c])}</span></span><span class="in${when === "きょう" || when === "あした" ? " soon" : ""}">${when}</span></li>`;
+    // 年末年始が未定で、その日をまたいでいるとき（12/28〜が未定なのに 1/4 と出る、など）は、そう書く
+    const ye = CAL.yearEnd, skip = d && ye && ye.tentative && ymd(today) <= ye.off[1] && ymd(d) > ye.off[0];
+    return `<li>${tag(c)}<span class="dt">${d ? md(d) : "―"}<span class="rule">${esc(sched().rules[c])}${skip ? "（年末年始は未定のため、その前の日は出ていません）" : ""}</span></span><span class="in${when === "きょう" || when === "あした" ? " soon" : ""}">${when}</span></li>`;
   }).join("") + `</ul></div>`;
 
   // 通知の設定（3.1）
@@ -964,10 +971,10 @@ function renderCal(){
     const cats = catsOn(d), mv = movedOn(d);
     const cls = ["d", d.getDay() === 0 ? "sun" : d.getDay() === 6 ? "sat" : "", HOLIDAYS.has(k) ? "hol" : "", d < today ? "past" : "", +d === +today ? "is-today" : ""].filter(Boolean).join(" ");
     const label = `${mo+1}月${day}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`;
-    html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => tag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}${NATIVE && hasDay(k) ? `<span class="bell" aria-label="通知あり">🔔</span>` : ""}</button>`;
+    html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => tag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}${undecided(d) ? `<span class="mv und">未定</span>` : ""}${NATIVE && hasDay(k) ? `<span class="bell" aria-label="通知あり">🔔</span>` : ""}</button>`;
   }
   html += `</div><div class="legend">` + CAL_ORDER.filter(c => sched().rules[c]).map(c => `<span><i style="--cc:${cssVar(c)}"></i>${esc(SHORT[c])}＝${esc(LONG[c])}</span>`).join("") + `</div>
-    <p class="small" style="margin:10px 0 0">日付をタップすると、出せるごみの詳しい出し方が見られます。${Object.keys(sched().moved).length ? "祝日などで収集日が移った日には「振替」と表示しています。" : ""}</p></div>`;
+    <p class="small" style="margin:10px 0 0">日付をタップすると、出せるごみの詳しい出し方が見られます。${Object.keys(sched().moved).length ? "祝日などで収集日が移った日には「振替」と表示しています。" : ""}${CAL.yearEnd && CAL.yearEnd.tentative ? `年末年始（${md(new Date(CAL.yearEnd.off[0] + "T00:00"))}〜${md(new Date(CAL.yearEnd.off[1] + "T00:00"))}）の収集日は、市の発表を待っているので「未定」と表示しています。` : ""}</p></div>`;
   if (!inRange(today)) html += `<div class="empty">このアプリには${nendo(CAL)}（${CAL.year}年4月〜${CAL.year + 1}年3月）の収集日が入っています。新しい年度のカレンダーが出たら更新してください。</div>`;
   v.innerHTML = html;
   updateBadge();
