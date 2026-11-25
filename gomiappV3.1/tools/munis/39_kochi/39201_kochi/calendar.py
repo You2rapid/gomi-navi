@@ -271,7 +271,61 @@ def make_calendar(folder, year):
     lack = [b for b in daigai if b not in used]
     if lack:
         raise ValueError(f"大街別町名一覧の大街が、収集日の表にありません：{'・'.join(lack)}")
+    choice = resource_choice(folder / "休日のごみ収集計画.html", year, (ye0, ye1))
     print(f"高知市：地区 {len(areas)}・日程 {len(schedules)}（可燃ごみ {'・'.join(SCHED)}、プラ {pla_wd}曜日）")
-    print(f"  資源物・不燃ごみ（カレンダーに入れない）：{res}")
-    return {"year": year, "schedules": schedules, "areas": areas,
+    print(f"  資源物・不燃ごみ：{res} → 使う人がえらぶ {len(choice['options'])} 通り（休日の変更 {sum(len(o['moved']) for o in choice['options'].values())} 日）")
+    return {"year": year, "schedules": schedules, "areas": areas, "choice": choice,
             "yearEnd": {"off": [ye0.isoformat(), ye1.isoformat()], "tentative": False}}
+
+
+# ---------- 資源物・不燃ごみ（使う人がえらぶ） ----------
+# 市は、町ごとの資源物・不燃ごみの日を公表していない（「第1月曜日から第4金曜日までの20地区」とだけある）。
+# そこで、使う人が町内会の回覧などで知っている「第○○曜日」をえらぶと、その日がカレンダーに出るようにする。
+# 祝日・年末年始の変更は、市の「休日のごみ収集計画」の「資源物・不燃ごみ等」の表のとおり（推測しない）。
+RES_CAT = "資源不燃"
+
+
+def resource_choice(path, year, year_end):
+    t = page_text(path)
+    if "「資源物・不燃ごみ等」" not in t:
+        raise ValueError(f"{path} に「資源物・不燃ごみ等」の表がありません")
+    tab = t.rsplit("「資源物・不燃ごみ等」", 1)[1]
+    change = {}       # 休みになる日 → 変更して収集する日
+    ok_days = set()   # 祝日でも当日分を収集する日
+    for r in re.findall(r"^(\d+月\d+日.*?)$", tab, re.M):
+        c = r.split("|")
+        d = md(c[0], year)
+        if not d or len(c) < 2:
+            continue
+        v = c[1]
+        m = re.match(r"休み(\d+月\d+日)\(.曜日\)に変更して収集", v)
+        if m:
+            change[d] = md(m[1], year)
+        elif v.startswith("当日分"):
+            ok_days.add(d)
+        elif not re.search(r"の資源物・不燃ごみ収集地区\(第\d.曜日地区\)を収集", v):
+            raise ValueError(f"休日の収集計画（資源物・不燃ごみ等）の {c[0]} が読めません：{v}")
+    if len(change) + len(ok_days) < 5:
+        raise ValueError(f"{path}：資源物・不燃ごみ等の表が読めません")
+    options = {}
+    for n in range(1, 5):
+        for wi, w in enumerate("月火水木金"):
+            days, moved = [], []
+            for mo in list(range(4, 13)) + [1, 2, 3]:
+                y = year if mo >= 4 else year + 1
+                d = dt.date(y, mo, 1)
+                d += dt.timedelta(days=(wi - d.weekday()) % 7 + 7 * (n - 1))
+                if d in change:
+                    days.append(change[d].isoformat())
+                    moved.append(change[d].isoformat())
+                elif year_end[0] <= d <= year_end[1]:
+                    raise ValueError(f"第{n}{w}曜日の {d} が年末年始の休みで、休日の表に変更の日がありません")
+                else:
+                    days.append(d.isoformat())
+            options[f"第{n}{w}曜日"] = {"days": days, "moved": moved}
+    return {"label": "資源物・不燃ごみの日", "cat": RES_CAT, "rule": "毎月{o}（月1回）",
+            "ask": "資源物・不燃ごみの日をえらんでください",
+            "help": "高知市は、資源物・不燃ごみの日（第1月曜日〜第4金曜日の20通り）を町ごとに公表していません。"
+                    "町内会の回覧や、ごみステーションの看板で確かめてえらんでください。分からないときは環境業務課（088-856-5374）へ。"
+                    "一部のごみステーションは、同じ地区でも日がちがうことがあります。",
+            "options": options}

@@ -223,6 +223,13 @@ a{color:var(--accent)}
 .seg button{flex:1;border:0;background:transparent;padding:7px 2px;border-radius:9px;font-size:14px;cursor:pointer;color:var(--muted)}
 .seg.many{flex-wrap:wrap}
 .seg.many button{flex:1 0 22%}
+.choice{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:10px 14px;margin:0 0 12px}
+.choice label{display:flex;align-items:center;gap:10px;justify-content:space-between;font-weight:700;font-size:14px}
+.choice select{font:inherit;font-size:15px;padding:6px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--text)}
+.choice.ask{border:2px solid var(--accent)}
+.choice.ask label{display:block} .choice.ask label span{display:block} .choice.ask select{width:100%;margin-top:8px}
+.choice label span{min-width:0}
+.choice .small{margin:8px 0 0;font-weight:400}
 .pick-sel{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);margin:0 0 10px}
 .area-list li.area-sub{padding:8px 14px 4px;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--surface-2)}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:700;box-shadow:var(--shadow)}
@@ -651,7 +658,10 @@ function openItem(id){
 }
 // 詳細シートの「次に出せる日」
 function nextBox(c){
+  c = dayCat(c);
   if (!CAL || !(c in SHORT)) return "";
+  if (CAL.choice && c === CAL.choice.cat && calState.area && calState.area.c === CITY_ID && !calState.area.u)
+    return `<div class="next-box"><span class="small">「収集日」タブで「${esc(CAL.choice.label)}」をえらぶと、次に出せる日が表示されます。</span> <button class="more" data-gocal>えらぶ →</button></div>`;
   if (!calState.area) return `<div class="next-box"><span class="small">「収集日」タブで地区をえらぶと、この品目を次に出せる日が表示されます。</span> <button class="more" data-gocal>地区をえらぶ →</button></div>`;
   const d = nextFor(c);
   return `<div class="next-box">
@@ -730,7 +740,7 @@ function makeCity(code, d){
   return {
     code, name: MUNI[code].name, cut: c.cut, cal: d.calendar, cats, order: c.order,
     items: d.items.map(x => Array.isArray(x) ? {n:x[0], c:x[1], y:x[2], d:x[3]} : {...x}).map(it => it.k ? it : {...it, k: kanaHead(it.y)}),
-    darkInk: new Set(c.darkInk || []), outline: new Set(c.outlineInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
+    darkInk: new Set(c.darkInk || []), dayAs: c.dayAs || {}, outline: new Set(c.outlineInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
     regions: c.regions || [], regionName: r => r ? r + (c.regionSuffix || "") : "",
     schedLabel: s => c.schedHide ? "" : re && re.test(s) ? sp.label.replace("{s}", s) : s,   // schedHide：日程の名前を出さない（京都市など、町ごとに曜日が決まる市）
     towns: (d.towns && d.towns.t) || [],   // 地区の検索用の町名 [[町名, [地区の番号…]], …]
@@ -804,10 +814,29 @@ function saveAreas(){
   try { localStorage.setItem(AREAS_KEY, JSON.stringify(calState.areas)); localStorage.setItem(CUR_KEY, String(calState.cur)); } catch(e){}
 }
 
-const sched = () => CAL.schedules[calState.area.s];
+// 使う人がえらぶ収集日（高知市の資源物・不燃ごみなど。市が町ごとに公表していない日）：
+// calendar.js の choice（えらべる日ごとの収集日）と、地区に保存した u（えらんだ日）を、地区の日程に足す
+const schedCache = new Map();
+function schedOfArea(a){
+  const cy = CITIES[a.c], base = cy && cy.cal.schedules[a.s];
+  const ch = base && cy.cal.choice, o = ch && a.u && ch.options[a.u];
+  if (!o) return base;
+  const key = a.c + "|" + a.s + "|" + a.u;
+  if (!schedCache.has(key)){
+    const days = {...base.days}, moved = {...(base.moved || {})};
+    for (const k of o.days) days[k] = (days[k] || []).concat(ch.cat);
+    for (const k of o.moved) moved[k] = (moved[k] || []).concat(ch.cat);
+    schedCache.set(key, {...base, days, moved, rules: {...base.rules, [ch.cat]: ch.rule.replace("{o}", a.u)}});
+  }
+  return schedCache.get(key);
+}
+const sched = () => schedOfArea(calState.area);
+// 品目の区分 → カレンダーの札（高知市：紙類・カン…は「資源物・不燃ごみ」の日に出す）
+const dayCat = c => (CITY.dayAs && CITY.dayAs[c]) || c;
 const today0 = () => { const t = now(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
 // 次に出せる日（出す時刻を過ぎたら、きょうは数えない）
 function nextFor(c){
+  c = dayCat(c);
   if (!CAL || !calState.area || calState.area.c !== CITY_ID || !sched().rules[c]) return null;
   let d = isLate(now()) ? addDays(today0(), 1) : today0();
   for (let i = 0; i < 400 && inRange(d); i++, d = addDays(d, 1))
@@ -863,6 +892,13 @@ const inRange = d => { const k = ymd(d); return k >= `${CAL.year}-04-01` && k <=
 function tag(c, cls = ""){ return `<span class="tag${ink(c)} ${cls}" style="--cc:${cssVar(c)}">${esc(SHORT[c])}</span>`; }
 const schedLabel = s => CITY.schedLabel(s);
 
+function choiceHtml(a){
+  const ch = CAL.choice;
+  const opts = Object.keys(ch.options).map(o => `<option value="${esc(o)}"${o === a.u ? " selected" : ""}>${esc(o)}</option>`).join("");
+  return `<div class="choice${a.u ? "" : " ask"}"><label><span>${a.u ? esc(ch.label) : esc(ch.ask)}</span>
+    <select data-choice aria-label="${esc(ch.label)}">${a.u ? "" : `<option value="">えらぶ</option>`}${opts}<option value="-">わからない（カレンダーに出さない）</option></select></label>
+    ${a.u ? "" : `<p class="small">${esc(ch.help)}</p>`}</div>`;
+}
 function renderCal(){
   const v = $("#view-cal");
   syncCity();
@@ -880,6 +916,7 @@ function renderCal(){
     html += `<div class="seg area-switch" role="group" aria-label="表示する地区">${calState.areas.map((x, i) =>
       `<button data-switch="${i}" aria-pressed="${i === calState.cur}">${esc(x.n.replace(/（.*?）/g, ""))}<small>${esc(CITIES[x.c].name)}${(CITIES[x.c].schedLabel(x.s) || x.n) !== x.n ? "・" + esc(CITIES[x.c].schedLabel(x.s)) : ""}</small></button>`).join("")}</div>`;
   }
+  if (CAL.choice) html += choiceHtml(a);
   html += remindHtml();
   const ns = inRange(today) ? notices() : [];
   if (ns.length) html += `<div class="notice" role="note"><span class="ic" aria-hidden="true">!</span><div><b class="ttl">お知らせ（これから2週間）</b>${ns.map(n => `<p>${n}</p>`).join("")}</div></div>`;
@@ -1346,7 +1383,7 @@ const hasDay = k => calState.area && notify.days.some(x => x.a === areaKey(calSt
 function upcoming(){
   const t0 = new Date();
   return notify.days.map(x => ({...x, area: calState.areas.find(a => areaKey(a) === x.a)}))
-    .filter(x => x.area && CITIES[x.area.c] && (CITIES[x.area.c].cal.schedules[x.area.s].days[x.k] || []).length && notifyAt(x.area, x.k) > t0)
+    .filter(x => x.area && CITIES[x.area.c] && (schedOfArea(x.area).days[x.k] || []).length && notifyAt(x.area, x.k) > t0)
     .sort((x, y) => notifyAt(x.area, x.k) - notifyAt(y.area, y.k));
 }
 async function scheduleNative(){
@@ -1361,7 +1398,7 @@ async function scheduleNative(){
     if (!list.length) return;
     await LN.schedule({notifications: list.slice(0, 60).map((x, i) => {
       const cy = CITIES[x.area.c], at = notifyAt(x.area, x.k), c = cutOfArea(x.area);
-      const names = (cy.cal.schedules[x.area.s].days[x.k] || []).slice().sort((p, q) => cy.calOrder.indexOf(p) - cy.calOrder.indexOf(q)).map(n => cy.long[n]).join("・");
+      const names = (schedOfArea(x.area).days[x.k] || []).slice().sort((p, q) => cy.calOrder.indexOf(p) - cy.calOrder.indexOf(q)).map(n => cy.long[n]).join("・");
       const eve = notify.time < 0;
       return {id: i + 1, title: `${eve ? "あした" : "きょう"}は ${names} の日`,
         body: `${eve ? "あすの" : ""}朝${c[0]}時${c[1] === 30 ? "半" : c[1] ? c[1] + "分" : ""}までに出してください（${x.area.n}）`,
@@ -1404,7 +1441,7 @@ function icsFold(line){
 const icsDur = m => { const v = Math.abs(m), h = Math.floor(v / 60), mm = v % 60; return `${m < 0 ? "-" : ""}PT${h ? h + "H" : ""}${mm || !h ? mm + "M" : ""}`; };
 function icsText(a, k){
   const cy = CITIES[a.c], d = new Date(+k.slice(0,4), +k.slice(5,7)-1, +k.slice(8,10)), c = cutOfArea(a);
-  const cs = (cy.cal.schedules[a.s].days[k] || []).slice().sort((p, q) => cy.calOrder.indexOf(p) - cy.calOrder.indexOf(q));
+  const cs = (schedOfArea(a).days[k] || []).slice().sort((p, q) => cy.calOrder.indexOf(p) - cy.calOrder.indexOf(q));
   const names = cs.map(x => cy.long[x]).join("・"), cut = `朝${c[0]}時${c[1] === 30 ? "半" : c[1] ? c[1] + "分" : ""}`;
   const at = notifyAt(a, k), trig = Math.round((at - d) / 60000);
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
@@ -1456,7 +1493,7 @@ function notifyStatus(){
     const u = upcoming();
     if (u.length){
       const x = u[0], cy = CITIES[x.area.c];
-      return `つぎ：${atLabel(notifyAt(x.area, x.k))}（${(cy.cal.schedules[x.area.s].days[x.k] || []).map(c => cy.long[c]).join("・")}）${u.length > 1 ? `ほか${u.length - 1}件` : ""}`;
+      return `つぎ：${atLabel(notifyAt(x.area, x.k))}（${(schedOfArea(x.area).days[x.k] || []).map(c => cy.long[c]).join("・")}）${u.length > 1 ? `ほか${u.length - 1}件` : ""}`;
     }
   }
   return `日にちを長押しすると、その日を${timeLabel(notify.time)}に知らせます`;
@@ -1464,7 +1501,7 @@ function notifyStatus(){
 function nfListHtml(){
   const u = upcoming();
   return u.length ? `<ul class="nf-list">${u.map(x => {
-    const cy = CITIES[x.area.c], names = (cy.cal.schedules[x.area.s].days[x.k] || []).map(c => cy.long[c]).join("・");
+    const cy = CITIES[x.area.c], names = (schedOfArea(x.area).days[x.k] || []).map(c => cy.long[c]).join("・");
     return `<li><span><b>${esc(atLabel(notifyAt(x.area, x.k)))}</b><small>${esc(names)}${calState.areas.length > 1 ? `（${esc(x.area.n)}）` : ""}</small></span><button class="del" data-nfdel="${esc(x.a)}|${x.k}" aria-label="やめる">✕</button></li>`;
   }).join("")}</ul>` : `<p class="small">まだありません。カレンダーの日にちを長押しして「🔔 この日を知らせる」を押してください。</p>`;
 }
@@ -1790,6 +1827,12 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet()
 document.addEventListener("change", e => {
   if (e.target.matches("[data-camfile]")) runCamera(e.target.files[0]);
   if (e.target.matches("[data-nf]")) onNfChange(e.target);
+  // 使う人がえらぶ収集日（地区ごとに覚える。「わからない」はカレンダーに出さない）
+  if (e.target.matches("[data-choice]") && calState.area){
+    const v = e.target.value, a = calState.areas[calState.cur];
+    if (v && v !== "-") a.u = v; else delete a.u;
+    saveAreas(); renderCal();
+  }
 });
 document.addEventListener("input", e => { if (e.target.matches('[data-nf="time"]')) onNfChange(e.target, true); });
 window.addEventListener("resize", updateHdr);
