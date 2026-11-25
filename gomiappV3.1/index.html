@@ -223,6 +223,8 @@ a{color:var(--accent)}
 .seg button{flex:1;border:0;background:transparent;padding:7px 2px;border-radius:9px;font-size:14px;cursor:pointer;color:var(--muted)}
 .seg.many{flex-wrap:wrap}
 .seg.many button{flex:1 0 22%}
+.pick-sel{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);margin:0 0 10px}
+.area-list li.area-sub{padding:8px 14px 4px;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--surface-2)}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:700;box-shadow:var(--shadow)}
 .picker input{width:100%;font:inherit;font-size:16px;padding:10px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);outline:none;margin:0 0 10px}
 .picker input:focus{border-color:var(--accent)}
@@ -705,7 +707,9 @@ function loadCity(code){
   if (!MUNI[code]) return Promise.reject(new Error("unknown " + code));
   if (!cityLoading[code]){
     const dir = `data/${MUNI[code].path}/`;
-    cityLoading[code] = Promise.all(["city", "items", "calendar"].map(k => loadData(dir + k + ".js")))
+    // towns.js（地区の検索用の町名）は、なくても使えるようにする
+    cityLoading[code] = Promise.all(["city", "items", "calendar"].map(k => loadData(dir + k + ".js"))
+      .concat(loadData(dir + "towns.js").catch(() => null)))
       .then(() => (CITIES[code] = makeCity(code, window.GOMI_DATA[code])))
       .catch(e => { delete cityLoading[code]; throw e; });
   }
@@ -729,6 +733,7 @@ function makeCity(code, d){
     darkInk: new Set(c.darkInk || []), outline: new Set(c.outlineInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
     regions: c.regions || [], regionName: r => r ? r + (c.regionSuffix || "") : "",
     schedLabel: s => c.schedHide ? "" : re && re.test(s) ? sp.label.replace("{s}", s) : s,   // schedHide：日程の名前を出さない（京都市など、町ごとに曜日が決まる市）
+    towns: (d.towns && d.towns.t) || [],   // 地区の検索用の町名 [[町名, [地区の番号…]], …]
     hint: c.hint || "", schedPick: c.schedPick || "", contact: c.contact, rules: c.rules, aiCat: c.aiCat || {},
     footer: c.footer.replace("{nendo}", nendo(d.calendar))
   };
@@ -945,14 +950,13 @@ function renderPicker(){
     <button class="btn-sub geo-btn" data-geo>📍 今いる場所から探す</button>
     <p class="small geo-note">位置情報はこのスマホの中だけで使い、外には送りません。</p>
     <div id="geoBox">${geoBoxHtml()}</div>
-    ${MUNI_REG.prefs.length > 1 ? `<span class="step">都道府県</span>
-    <div class="seg">${MUNI_REG.prefs.map(p => `<button data-pref="${p.code}" aria-pressed="${MUNI[calState.city].pref === p.code}">${esc(p.name)}</button>`).join("")}</div>` : ""}
+    ${prefPickerHtml()}
     <span class="step">市町村</span>
-    <div class="seg">${MUNIS.filter(m => m.pref === MUNI[calState.city].pref).map(m => `<button data-city="${m.code}" aria-pressed="${calState.city === m.code}">${esc(m.name)}</button>`).join("")}</div>
+    ${cityPickerHtml()}
     ${cy.regions.length ? `<span class="step">地域</span>
-    <div class="seg${cy.regions.length > 5 ? " many" : ""}">${cy.regions.map(r => `<button data-region="${esc(r)}" aria-pressed="${calState.region === r}">${esc(r)}</button>`).join("")}</div>
-    <input id="areaQ" type="search" placeholder="${esc(cy.hint)}" value="${esc(calState.q)}" autocomplete="off">`
+    <div class="seg${cy.regions.length > 5 ? " many" : ""}">${cy.regions.map(r => `<button data-region="${esc(r)}" aria-pressed="${calState.region === r}">${esc(r)}</button>`).join("")}</div>`
     : `<span class="step">地区</span>`}
+    ${areaSearchable(cy) ? `<input id="areaQ" type="search" placeholder="${esc(areaHint(cy))}" value="${esc(calState.q)}" autocomplete="off">` : ""}
     <ul class="area-list" id="areaList"></ul>
     ${cy.schedPick ? `<details class="alt"><summary>${esc(cy.schedPick)}</summary>
       <div class="sched-grid">${Object.keys(cy.cal.schedules).map(s => `<button data-sched="${esc(s)}">${esc(cy.schedLabel(s))}</button>`).join("")}</div>
@@ -961,14 +965,64 @@ function renderPicker(){
   renderAreaList();
   const q = $("#areaQ");
   if (q) q.addEventListener("input", e => { calState.q = e.target.value; renderAreaList(); });
+  const pq = $("#prefSel");
+  if (pq) pq.addEventListener("change", e => { calState.cq = ""; pickCity(sortedMunis(e.target.value)[0].code); });
+  const cq = $("#cityQ");
+  if (cq) cq.addEventListener("input", e => { calState.cq = e.target.value; $("#cityList").innerHTML = cityButtons(); });
 }
+// 都道府県・市町村のえらび方：少ないときはボタンを並べ、多いときは、県はえらぶ欄、市町村は名前で絞り込む
+const PREF_SELECT_MIN = 5, CITY_SEARCH_MIN = 13, AREA_SEARCH_MIN = 15;
+const sortedMunis = pref => MUNIS.filter(m => m.pref === pref).sort((a, b) => a.code.localeCompare(b.code));
+function prefPickerHtml(){
+  const prefs = MUNI_REG.prefs, cur = MUNI[calState.city].pref;
+  if (prefs.length <= 1) return "";
+  if (prefs.length < PREF_SELECT_MIN)
+    return `<span class="step">都道府県</span><div class="seg">${prefs.map(p => `<button data-pref="${p.code}" aria-pressed="${cur === p.code}">${esc(p.name)}</button>`).join("")}</div>`;
+  return `<span class="step">都道府県</span><select id="prefSel" class="pick-sel" aria-label="都道府県">${prefs.map(p => `<option value="${p.code}"${cur === p.code ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>`;
+}
+function cityButtons(){
+  const all = sortedMunis(MUNI[calState.city].pref), qn = normChar(calState.cq || "");
+  const list = qn ? all.filter(m => normChar(m.name).includes(qn) || normChar(m.yomi || "").includes(qn)) : all;
+  return list.length ? list.map(m => `<button data-city="${m.code}" aria-pressed="${calState.city === m.code}">${esc(m.name)}</button>`).join("")
+    : `<span class="small" style="padding:6px 8px">見つかりませんでした</span>`;
+}
+function cityPickerHtml(){
+  const n = sortedMunis(MUNI[calState.city].pref).length;
+  if (n < CITY_SEARCH_MIN) return `<div class="seg${n > 4 ? " many" : ""}" id="cityList">${cityButtons()}</div>`;
+  return `<input id="cityQ" type="search" placeholder="市町村名で絞り込む（例：${esc(MUNI[calState.city].name)}）" value="${esc(calState.cq || "")}" autocomplete="off">
+    <div class="seg many" id="cityList">${cityButtons()}</div>`;
+}
+// 地区が多い市は、検索欄を出す（地区名・よみ・説明と、towns.js の町名で探す）
+const areaSearchable = cy => cy.regions.length > 0 || cy.cal.areas.length >= AREA_SEARCH_MIN;
+const areaHint = cy => cy.hint || (cy.towns.length ? "地区名・町名で探す（例：" + cy.towns[0][0] + "）" : "地区名で探す");
 function renderAreaList(){
   const cy = CITIES[calState.city], qn = normChar(calState.q);
-  // 町名検索はえらんだ市の全域から。空欄のときはえらんだ地域の一覧（地域分けのない市はすべて）
-  const list = cy.cal.areas.map((a, i) => ({...a, i})).filter(a => !cy.regions.length ? true
-    : qn ? normChar(a.n).includes(qn) || normChar(a.y || "").includes(qn) : a.r === calState.region);
-  $("#areaList").innerHTML = list.length ? list.map(a => `<li><button data-area="${a.i}"><span class="nm2">${esc(a.n)}${a.d ? `<span class="desc">${esc(a.d)}</span>` : ""}</span>${qn ? `<span class="small">${esc(a.r)}</span>` : ""}${(cy.schedLabel(a.s) || a.n) !== a.n ? `<span class="s">${esc(cy.schedLabel(a.s))}</span>` : ""}</button></li>`).join("")
-    : `<li style="padding:14px;color:var(--muted)">見つかりませんでした。漢字で入力するか、上の地域から探してください。</li>`;
+  const sched = a => (cy.schedLabel(a.s) || a.n) !== a.n ? `<span class="s">${esc(cy.schedLabel(a.s))}</span>` : "";
+  const reg = a => qn && a.r ? `<span class="small">${esc(cy.regionName(a.r))}</span>` : "";
+  // 検索はえらんだ市の全域から。空欄のときはえらんだ地域の一覧（地域分けのない市はすべて）
+  const list = cy.cal.areas.map((a, i) => ({...a, i})).filter(a => qn
+    ? normChar(a.n).includes(qn) || normChar(a.y || "").includes(qn) || normChar(a.d || "").includes(qn)
+    : !cy.regions.length || a.r === calState.region);
+  let html = list.map(a => `<li><button data-area="${a.i}"><span class="nm2">${esc(a.n)}${a.d ? `<span class="desc">${esc(a.d)}</span>` : ""}</span>${reg(a)}${sched(a)}</button></li>`).join("");
+  // 町名から：「新天町 → 新川」のように、その町の地区を出す（2つ以上のときは、どちらかをえらぶ）
+  // 地区ごとに1行にまとめる（中央町一丁目・二丁目…が同じ地区なら1行）
+  if (qn && cy.towns.length){
+    const by = new Map();
+    for (const [w, cs] of cy.towns){
+      if (!normChar(w).includes(qn)) continue;
+      for (const i of cs){
+        if (!cy.cal.areas[i]) continue;
+        const g = by.get(i) || {names: [], multi: false};
+        g.names.push(w); g.multi = g.multi || cs.length > 1; by.set(i, g);
+      }
+    }
+    const rows = [...by].slice(0, 40).map(([i, g]) => {
+      const a = cy.cal.areas[i], nm = g.names.slice(0, 4).join("・") + (g.names.length > 4 ? ` ほか${g.names.length - 4}` : "");
+      return `<li><button data-area="${i}"><span class="nm2">${esc(a.n)}<span class="desc">${esc(nm)}${g.multi ? "（いくつかの地区にまたがる町です。お住まいの地区をえらんでください）" : ""}</span></span>${reg(a)}${sched(a)}</button></li>`;
+    });
+    if (rows.length) html += `<li class="area-sub">町名から（${esc(calState.q.trim())}）</li>` + rows.join("");
+  }
+  $("#areaList").innerHTML = html || `<li style="padding:14px;color:var(--muted)">見つかりませんでした。漢字で入力するか、${cy.regions.length ? "上の地域から" : "検索欄を空にして一覧から"}探してください。</li>`;
 }
 // 市をえらび直したとき（地区がまだ1つもなければ、品目検索などもその市にする）
 function pickCity(id){
@@ -1200,7 +1254,7 @@ $("#view-cal").addEventListener("click", e => {
   const ct = e.target.closest("[data-city]");
   if (ct){ pickCity(ct.dataset.city); return; }
   const pf = e.target.closest("[data-pref]");
-  if (pf){ pickCity(MUNIS.find(m => m.pref === pf.dataset.pref).code); return; }
+  if (pf){ calState.cq = ""; pickCity(sortedMunis(pf.dataset.pref)[0].code); return; }
   if (e.target.closest("[data-pick-cancel]")){ calState.picking = false; calState.geo = null; renderCal(); window.scrollTo({top:0}); return; }
   if (e.target.closest("[data-geo]")){ findByGps(); return; }
   if (e.target.closest("[data-notify]")){ openNotify(); return; }

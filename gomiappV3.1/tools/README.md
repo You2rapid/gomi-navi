@@ -17,6 +17,7 @@ gomiappV3.1/
         city.js                 分別区分（名前・色・出し方）、カレンダーの表示、ルール、問い合わせ先 … 手で直す
         items.js                品目検索のデータ                                                    … 道具で作る
         calendar.js             その年度の収集日と地区の一覧                                        … 毎年、道具で作る
+        towns.js                地区の検索用の町名（町名 → 地区）                                   … build_geo.py が作る（毎年 update_year.py から）
   geo/
     index.json                  県の一覧と範囲
     35_yamaguchi.json           その県の町の境目と、地区との対応（今いる場所から探す）

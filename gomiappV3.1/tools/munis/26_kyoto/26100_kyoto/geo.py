@@ -11,6 +11,9 @@ e-Stat の町名は「学区＋町名」（例：待鳳紫野今宮町）なの�
 """
 import re
 
+# 地区名がそのまま町名なので、検索用の町名（towns.js）は作らない（手順書の決まり B2）
+TOWN_SEARCH = False
+
 
 def loose(s):
     return s.translate(str.maketrans({"ヶ": "ケ", "ｹ": "ケ", "峯": "峰", "之": "ノ", "の": "ノ"}))

@@ -78,7 +78,7 @@ gomiData("35202", "city", /*CITY-START*/{
  ],
  "regions": [],
  "regionSuffix": "",
- "hint": "地区名で絞り込む（例：東岐波、ことしば）",
+ "hint": "地区名・町名で探す（例：ことしば、中央町、草江）",
  "schedPick": "",
  "contact": "宇部市 廃棄物対策課（0836-33-7291）",
  "aiCat": {

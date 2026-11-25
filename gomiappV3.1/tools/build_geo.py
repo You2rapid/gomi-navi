@@ -58,6 +58,7 @@ def build_pref(pref, ms, check=False):
         ts = [{"n": t["name"], **inf, "b": bbox(t["rings"], base), "p": [encode(rg, base) for rg in t["rings"]]} for t, inf in zip(towns, info)]
         out["cities"][code] = {"towns": ts, **extra}
         print(f"  {m}：町丁 {len(ts)}")
+        write_towns(m, ts, cal)
         for t in ts:
             if "c" in t:
                 lines.append(f"{m.name} {t['n']}\t{t.get('r', '')}\t{' / '.join(cal['areas'][j]['n'] for j in t['c'])}")
@@ -67,6 +68,32 @@ def build_pref(pref, ms, check=False):
         (M.GEO / f"{pref['code']}_check.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return {"code": pref["code"], "name": pref["name"], "file": fn,
             "bbox": [round(min(xs), 4), round(min(ys), 4), round(max(xs), 4), round(max(ys), 4)]}
+
+
+def write_towns(m, ts, cal):
+    """地区の検索用の町名（data/<県>/<自治体>/towns.js）。町名で探すと、その町の地区が出るようにする（手順書の決まり B2）。
+    町と地区の対応は geo.py の town_info（今いる場所から探すと同じ）。geo.py に search_words(cal) があれば、その呼び名も足す。
+    地区名がそのまま町名の市（京都市）は、geo.py に TOWN_SEARCH = False と書く（中身が空のファイルになる）"""
+    mod = m.module("geo")
+    path = m.data_dir / "towns.js"
+    area_names = {a["n"] for a in cal["areas"]}
+    words = {}
+    for t in ts:
+        name = t["n"][2:] if t["n"].startswith("大字") and len(t["n"]) > 2 else t["n"]
+        if t.get("c") and name not in area_names:
+            words.setdefault(name, set()).update(t["c"])
+    if not getattr(mod, "TOWN_SEARCH", True):
+        words = {}     # 空のファイルにする（アプリが読みに来たときに「ない」とならないように）
+    elif hasattr(mod, "search_words"):
+        for w, cs in mod.search_words(cal).items():
+            if w and w not in area_names and cs:
+                words.setdefault(w, set()).update(cs)
+    data = {"t": [[w, sorted(cs)] for w, cs in sorted(words.items())]}
+    path.write_text(f"// {m.pref_name} {m.name}（{m.code}）の地区の検索用の町名（町名 → 地区の番号）\n"
+                    "// tools/build_geo.py が自動で作ったファイルです。手で直さず、geo.py を直して build_geo.py を動かしてください。\n"
+                    f'gomiData("{m.code}", "towns", ' + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ");\n",
+                    encoding="utf-8", newline="\n")
+    print(f"  {m}：検索用の町名 {len(words)} → {path.relative_to(M.ROOT)}")
 
 
 def main():

@@ -109,5 +109,17 @@ def town_info(towns, cal):
     return out
 
 
+def search_words(cal):
+    """地区の検索用の呼び名：人口統計の Excel の自治会の通称名 → その通称名が出てくる地区（2つ以上なら全部）"""
+    names = [a["n"] for a in cal["areas"]]
+    alias, _, _ = jiti()
+    out = {}
+    for i, n in enumerate(names):
+        for w in alias.get(n, ()):
+            if len(w) >= 2:
+                out.setdefault(w, set()).add(i)
+    return {w: sorted(cs) for w, cs in out.items()}
+
+
 def extra(cal):
     return {}
