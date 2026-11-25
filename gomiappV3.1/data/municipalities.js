@@ -69,6 +69,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "yomi": "きょうとし"
   },
   {
+   "code": "26204",
+   "pref": "26",
+   "name": "宇治市",
+   "slug": "uji",
+   "yomi": "うじし"
+  },
+  {
    "code": "39201",
    "pref": "39",
    "name": "高知市",
