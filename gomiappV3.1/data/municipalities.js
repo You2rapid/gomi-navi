@@ -83,6 +83,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "yomi": "かめおかし"
   },
   {
+   "code": "26209",
+   "pref": "26",
+   "name": "長岡京市",
+   "slug": "nagaokakyo",
+   "yomi": "ながおかきょうし"
+  },
+  {
    "code": "39201",
    "pref": "39",
    "name": "高知市",
