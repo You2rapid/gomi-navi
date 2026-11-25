@@ -131,6 +131,7 @@ python gomiappV3.1/tools/update_year.py 2027
 | `order` | 分別区分の並び（品目検索・分別区分タブ） |
 | `calOrder`・`short`・`long`・`bag` | カレンダーに出す区分の並び・短い名前・長い名前・袋 |
 | `darkInk` | 色が明るく、文字を黒にする区分 |
+| `outlineInk` | 白い札に黒いふちを付ける区分（市のカレンダーが白地に黒いふちの札のもの。例：光市の可燃ごみ）。`darkInk` にも入れる |
 | `regions`・`regionSuffix` | 地域で分けて地区をえらぶ市（周南市の徳山・新南陽…と「地域」） |
 | `schedPattern`・`schedPick`・`schedHide` | 日程の呼び方（例：A → A日程）と、日程から直接えらぶ欄。`schedHide: true` で日程の名前を出さない（京都市のように町ごとに曜日が決まる市） |
 | `hint`・`contact`・`aiCat`・`footer`・`rules` | 町名検索の例、問い合わせ先、カメラ判定の区分の読みかえ、画面下の説明（`{nendo}` は年度に置きかわる）、出し方タブの HTML |
