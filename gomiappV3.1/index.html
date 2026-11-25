@@ -84,7 +84,7 @@ header.top{position:sticky;top:0;z-index:20;background:var(--bg);padding-top:env
 .chip-nav.next{right:0;justify-content:flex-end;background:linear-gradient(to left,var(--bg) 45%,transparent)}
 .chip-nav span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
 .chip{flex:none;border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px 4px 8px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap}
-.chip .dot{width:10px;height:10px;border-radius:50%;background:var(--cc)}
+.chip .dot{width:10px;height:10px;border-radius:50%;background:var(--cc);box-shadow:inset 0 0 0 1px rgba(0,0,0,.28)}
 .chip[aria-pressed="true"]{border-color:var(--cc);background:color-mix(in srgb,var(--cc) 14%,var(--surface));font-weight:700}
 
 /* list */
@@ -106,6 +106,7 @@ ul.items li + li{border-top:1px solid var(--line)}
 .flag.new{color:var(--c-shokon)} .flag.chg{color:var(--c-funen)}
 .badge{flex:none;color:#fff;background:var(--cc);border-radius:8px;padding:3px 8px;font-size:12.5px;font-weight:700;white-space:nowrap;min-width:5.6em;text-align:center}
 .badge.ink-d,.tag.ink-d{color:#1a1a1a}
+.badge.ink-o,.tag.ink-o{box-shadow:inset 0 0 0 1.5px #333}   /* 白い札（市のカレンダーが白地に黒いふちのもの） */
 :root[data-theme="dark"] .badge,:root[data-theme="dark"] .tag{color:#111}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .badge,:root:not([data-theme="light"]) .tag{color:#111}}
 .empty{background:var(--surface);border-radius:14px;padding:22px 18px;text-align:center;color:var(--muted);box-shadow:var(--shadow)}
@@ -213,7 +214,7 @@ a{color:var(--accent)}
 @media (min-width:600px){.cal .d{min-height:78px}.cal .d .tag{font-size:12px}}
 .legend{display:flex;flex-wrap:wrap;gap:6px 10px;margin:10px 0 0;font-size:12.5px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
-.legend i{width:12px;height:12px;border-radius:3px;background:var(--cc);display:inline-block}
+.legend i{width:12px;height:12px;border-radius:3px;background:var(--cc);display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.28)}
 
 /* 地区えらび */
 .picker h2{font-size:17px;margin:4px 0 4px}
@@ -436,7 +437,7 @@ function loadData(path){
 const KANA_ROWS = [["あ","アイウエオ"],["か","カキクケコ"],["さ","サシスセソ"],["た","タチツテト"],["な","ナニヌネノ"],["は","ハヒフヘホ"],["ま","マミムメモ"],["や","ヤユヨ"],["ら","ラリルレロ"],["わ","ワヲン"]];
 
 // いま表示している市の区分・品目（useCity で切り替える）
-let CATS = {}, ORDER = [], ITEMS = [], DARK_INK = new Set();
+let CATS = {}, ORDER = [], ITEMS = [], DARK_INK = new Set(), OUTLINE = new Set();
 
 /* ===== 検索用の正規化（カタカナ→ひらがな、全角→半角、空白除去） ===== */
 function normChar(ch){
@@ -479,7 +480,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">"
 const cssVar = c => `var(${(CATS[c]||CATS["―"]).color})`;
 
 // 明るい色の区分は黒い文字にする
-const ink = c => DARK_INK.has(c) ? " ink-d" : "";
+const ink = c => (DARK_INK.has(c) ? " ink-d" : "") + (OUTLINE.has(c) ? " ink-o" : "");
 function badge(c){
   const label = {"×":"市で収集しない","―":"参照"}[c] || CATS[c].name.replace(/（.*?）/,"");
   return `<span class="badge${ink(c)}" style="--cc:${cssVar(c)}">${esc(label)}</span>`;
@@ -725,7 +726,7 @@ function makeCity(code, d){
   return {
     code, name: MUNI[code].name, cut: c.cut, cal: d.calendar, cats, order: c.order,
     items: d.items.map(x => Array.isArray(x) ? {n:x[0], c:x[1], y:x[2], d:x[3]} : {...x}).map(it => it.k ? it : {...it, k: kanaHead(it.y)}),
-    darkInk: new Set(c.darkInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
+    darkInk: new Set(c.darkInk || []), outline: new Set(c.outlineInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
     regions: c.regions || [], regionName: r => r ? r + (c.regionSuffix || "") : "",
     schedLabel: s => c.schedHide ? "" : re && re.test(s) ? sp.label.replace("{s}", s) : s,   // schedHide：日程の名前を出さない（京都市など、町ごとに曜日が決まる市）
     hint: c.hint || "", schedPick: c.schedPick || "", contact: c.contact, rules: c.rules, aiCat: c.aiCat || {},
@@ -744,7 +745,7 @@ function useCity(id){
   }
   if (id === CITY_ID) return;
   CITY_ID = id; CITY = CITIES[id];
-  CATS = CITY.cats; ORDER = CITY.order; DARK_INK = CITY.darkInk;
+  CATS = CITY.cats; ORDER = CITY.order; DARK_INK = CITY.darkInk; OUTLINE = CITY.outline;
   ITEMS = preparedItems[id] || (preparedItems[id] = prepItems(CITY.items));
   CAL = CITY.cal; CAL_ORDER = CITY.calOrder; SHORT = CITY.short; LONG = CITY.long; BAG = CITY.bag;
   state.cat = null;
