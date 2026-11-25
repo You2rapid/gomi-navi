@@ -11,6 +11,11 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "code": "26",
    "name": "京都府",
    "slug": "kyoto"
+  },
+  {
+   "code": "39",
+   "name": "高知県",
+   "slug": "kochi"
   }
  ],
  "munis": [
@@ -62,6 +67,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "京都市",
    "slug": "kyoto",
    "yomi": "きょうとし"
+  },
+  {
+   "code": "39201",
+   "pref": "39",
+   "name": "高知市",
+   "slug": "kochi",
+   "yomi": "こうちし"
   }
  ]
 }/*MUNIS-END*/;
