@@ -76,6 +76,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "yomi": "うじし"
   },
   {
+   "code": "26206",
+   "pref": "26",
+   "name": "亀岡市",
+   "slug": "kameoka",
+   "yomi": "かめおかし"
+  },
+  {
    "code": "39201",
    "pref": "39",
    "name": "高知市",
