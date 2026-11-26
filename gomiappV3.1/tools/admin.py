@@ -20,6 +20,7 @@
 """
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -48,6 +49,26 @@ def next_year(today=None):
 def can_switch(today=None):
     """全部の自治体を次の年度に切り替えてよいか（3月1日から）"""
     return (today or dt.date.today()) >= dt.date(next_year(today), 3, 1)
+
+
+def set_published(code, on):
+    """data/municipalities.js の自治体に "hidden": true を付ける（公開しない）か外す（公開する）。
+    公開しない自治体は、アプリの市町村の一覧・今いる場所から探すに出ない（データは残る）"""
+    path = M.DATA / "municipalities.js"
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r"/\*MUNIS-START\*/(.*)/\*MUNIS-END\*/", text, re.S)
+    reg = json.loads(m.group(1))
+    hit = next((x for x in reg["munis"] if x["code"] == code), None)
+    if not hit:
+        raise ValueError("自治体コードがちがいます")
+    if on:
+        hit.pop("hidden", None)
+    else:
+        hit["hidden"] = True
+    body = json.dumps(reg, ensure_ascii=False, indent=1)
+    path.write_text(text[:m.start(1)] + body + text[m.end(1):], encoding="utf-8", newline=NL)
+    return (f"{hit['name']}（{code}）を{'公開する' if on else '公開しない'}にしました（data/municipalities.js）。{NL}"
+            "アプリに反映するには、GitHub Desktop で Commit → Push origin。")
 
 
 def steps(tool, code):
@@ -114,6 +135,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, "だめです")
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+            if req.get("tool") == "publish":
+                with LOCK:
+                    return self.send(200, set_published(str(req.get("code")), bool(req.get("on"))))
             plan = steps(req.get("tool"), req.get("code"))
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
             return self.send(400, f"動かせません：{e}")

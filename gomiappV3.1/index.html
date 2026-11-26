@@ -704,11 +704,14 @@ const nendo = cal => cal ? `令和${cal.year - 2018}年度` : "";
    data/municipalities.js に使える自治体の一覧がある。自治体ごとの設定・品目・収集日は
    data/<県コード>_<県>/<自治体コード>_<名前>/ の city.js・items.js・calendar.js にあり、
    えらんだ自治体の分だけ読み込む（全国に増やしても、最初に読むデータが重くならないように）。 */
-const MUNI_REG = window.GOMI_MUNIS || {prefs:[], munis:[]};
-const PREF = Object.fromEntries(MUNI_REG.prefs.map(p => [p.code, p]));
+// 管理アプリで「公開しない」にした自治体（"hidden": true）は、アプリに出さない（データは残る）
+const MUNI_ALL = window.GOMI_MUNIS || {prefs:[], munis:[]};
+const PREF = Object.fromEntries(MUNI_ALL.prefs.map(p => [p.code, p]));
+const MUNI_REG = {munis: MUNI_ALL.munis.filter(m => !m.hidden)};
+MUNI_REG.prefs = MUNI_ALL.prefs.filter(p => MUNI_REG.munis.some(m => m.pref === p.code));
 const MUNIS = MUNI_REG.munis.map(m => ({...m, path:`${m.pref}_${PREF[m.pref].slug}/${m.code}_${m.slug}`}));
 const MUNI = Object.fromEntries(MUNIS.map(m => [m.code, m]));
-const DEFAULT_CITY = "35215";   // はじめて開いたときの自治体（周南市）
+const DEFAULT_CITY = MUNI["35215"] ? "35215" : (MUNIS[0] || {}).code;   // はじめて開いたときの自治体（周南市）
 const OLD_IDS = {shunan:"35215", kudamatsu:"35207", hikari:"35210"};   // 以前の保存形式（市の名前）→ 自治体コード
 const CITIES = {};              // 読み込んだ自治体
 const cityLoading = {};
@@ -1128,7 +1131,8 @@ function inTown(t, lon, lat){
 }
 // どの市のどの町にいるか。海沿いなどで少し外れたときは 300m 以内のいちばん近い町
 function locate(lon, lat){
-  const cities = geo.cities;
+  // 公開していない自治体の町は使わない（その場所は「外にいる」になる）
+  const cities = Object.fromEntries(Object.entries(geo.cities).filter(([id]) => MUNI[id]));
   for (const [id, cy] of Object.entries(cities)) for (const t of cy.towns) if (inTown(t, lon, lat)) return {city:id, town:t, near:false};
   const p = toM(lon, lat, lat);
   let best = null;
@@ -1870,7 +1874,7 @@ async function start(){
     return;
   }
   // 収集日データにない地区（日程の名前が変わったなど）は外す
-  calState.areas = calState.areas.filter(a => CITIES[a.c].cal.schedules[a.s]);
+  calState.areas = calState.areas.filter(a => MUNI[a.c] && CITIES[a.c] && CITIES[a.c].cal.schedules[a.s]);
   calState.cur = Math.min(calState.cur, Math.max(calState.areas.length - 1, 0));
   saveAreas();
   if (calState.area) calState.city = calState.area.c;

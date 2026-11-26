@@ -580,13 +580,18 @@ details.pg>summary::before{content:"▸";display:inline-block;width:1.1em;color:
 details.pg[open]>summary::before{content:"▾"}
 details.pg .cnt{color:var(--muted);font-size:13px;margin:0 10px}
 details.pg .wrap{border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}
-table.pt{table-layout:fixed;min-width:0} table.pt th,table.pt td{overflow-wrap:anywhere}
+table.pt{table-layout:fixed;min-width:0;width:100%} table.pt th,table.pt td{overflow-wrap:anywhere;padding:8px 6px}
+table.pt .c,table.pt td.name{white-space:normal} table.pt .c b{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+table.pt th{white-space:normal}
+details.pg .wrap{overflow-x:visible}
+label.pub{display:inline-flex;align-items:center;gap:3px;margin-top:4px;font-size:12px;color:var(--muted);cursor:pointer}
+tr.hid td{opacity:.55} tr.hid label.pub{opacity:1;color:var(--bad);font-weight:700}
 p.tools{margin:12px 0 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center} p.tools .sp{flex:1}
 p.tools label{font-size:13px;color:var(--muted)} p.tools select{font-size:13px;margin-left:4px}
 .ubs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
 button.ub{border:1px solid var(--accent);background:var(--surface);color:var(--accent);font-weight:700;border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 button.ub:disabled{opacity:.45;cursor:not-allowed}
-td.c button.ub{display:block;margin-top:6px;padding:2px 9px;font-size:12px;white-space:nowrap}
+td.c button.ub{display:block;margin-top:6px;padding:2px 8px;font-size:12px;white-space:normal;max-width:100%;text-align:left;line-height:1.3}
 tr.logrow td{background:var(--bg)} tr.logrow pre.log{margin:0}
 pre.log{background:#111;color:#dfe;font-size:12px;line-height:1.5;padding:8px 10px;border-radius:8px;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0} p.tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:3px 12px;font-size:13px;cursor:pointer}
 """
@@ -602,6 +607,20 @@ window.addEventListener("hashchange", openHash); openHash();
 const SERVED = location.protocol.startsWith("http");
 if (!SERVED) document.querySelector(".admin-off").hidden = false;
 const NY = new Date().getMonth() >= 3 ? new Date().getFullYear() + 1 : new Date().getFullYear();   // 次の年度
+// 公開する・しない（data/municipalities.js の "hidden"）。admin.py で開いたときだけ変えられる
+document.addEventListener("change", async e => {
+  const cb = e.target.closest("input[data-pub]"); if (!cb) return;
+  const tr = cb.closest("tr[data-code]"), log = tr.nextElementSibling.querySelector("pre.log");
+  tr.nextElementSibling.hidden = false;
+  if (!SERVED){ cb.checked = !cb.checked; log.textContent = "公開を変えるには、python gomiappV3.1/tools/admin.py で開いてください。"; return; }
+  cb.disabled = true;
+  try {
+    const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({tool:"publish", code:tr.dataset.code, on:cb.checked})});
+    log.textContent = await r.text();
+    if (r.ok) tr.classList.toggle("hid", !cb.checked); else cb.checked = !cb.checked;
+  } catch(err){ cb.checked = !cb.checked; log.textContent = "変えられませんでした：" + err + "（admin.py が止まっていないか見てください）"; }
+  cb.disabled = false;
+});
 const CMD = {status: () => ["status.py"], latest: c => [`download_sources.py ${NY} ${c} --list`],
   trynext: c => [`download_sources.py ${NY} ${c}`, `update_year.py ${NY} ${c} --preview`],
   switch: () => [`download_sources.py ${NY}`, `update_year.py ${NY}`, "check_muni.py", "status.py"]};
@@ -776,12 +795,13 @@ def main():
 <pre class="log" id="log-top" hidden></pre>
 <details class="sec" id="s-table" open><summary><h2>自治体ごと</h2></summary>
 <p class="howto">都道府県をクリックすると、その県の自治体の表が出ます。</p>"""]
-    # 県ごとに表が分かれても列がそろうように、列の幅を決めておく（単位 em）
-    width = {"name": 7.5, "cal": 8, "items": 8, "city": 6.5, "geo": 8.5, "addr": 12, "src": 8.5, "tools": 8, "lic": 12, "next": 12}
-    ws = [width["name"]] + [width.get(k, 9) for k, _ in cols]
-    head = (f'<colgroup>{"".join(f"<col style={chr(34)}width:{w}em{chr(34)}>" for w in ws)}</colgroup>'
+    # 県ごとに表が分かれても列がそろうように、列の幅を決めておく（割合。画面の幅に合わせて、横にはみ出さない）
+    width = {"name": 12, "cal": 10, "items": 9, "city": 8, "geo": 10, "addr": 14, "src": 11, "tools": 10, "lic": 16, "next": 12}
+    ws = [width["name"]] + [width.get(k, 10) for k, _ in cols]
+    head = (f'<colgroup>{"".join(f"<col style={chr(34)}width:{w / sum(ws) * 100:.2f}%{chr(34)}>" for w in ws)}</colgroup>'
             f"<thead><tr><th>自治体</th>{''.join(f'<th>{h(t)}</th>' for _, t in cols)}</tr></thead>")
-    tbl = f'<table class="pt" style="width:{sum(ws)}em">'
+    tbl = '<table class="pt">'
+    hidden = {x["code"] for x in M.registry()["munis"] if x.get("hidden")}   # 管理アプリで「公開しない」にした自治体
     groups = {}
     for r in rows:
         groups.setdefault(r[0].pref, []).append(r)
@@ -800,7 +820,9 @@ def main():
                  if f"{k}-{m.code}" in keys else
                  f'<td class="c {row[k][0]}"><b>{h(row[k][1])}</b><small>{h(row[k][2])}</small>{act.get(k, "")}</td>') if k in row else "<td></td>"
                 for k, _ in cols)
-            body.append(f'<tr data-code="{h(m.code)}"><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> <b>{h(m.name)}</b></a></td>{cells}</tr>'
+            pub = m.code not in hidden
+            body.append(f'<tr data-code="{h(m.code)}"{"" if pub else " class=" + chr(34) + "hid" + chr(34)}><td class="name"><a href="#m-{h(m.code)}"><small>{h(m.code)}</small> <b>{h(m.name)}</b></a>'
+                        f'<label class="pub" title="アプリに出すかどうか（data/municipalities.js）"><input type="checkbox" data-pub{" checked" if pub else ""}> 公開</label></td>{cells}</tr>'
                         f'<tr class="logrow" hidden><td colspan="{len(cols) + 1}"><pre class="log"></pre></td></tr>')
         body.append("</tbody></table></div></details>")
     body.append("</details>")
