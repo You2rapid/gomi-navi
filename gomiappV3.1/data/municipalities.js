@@ -177,6 +177,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "品川区",
    "slug": "shinagawa",
    "yomi": "しながわく"
+  },
+  {
+   "code": "13117",
+   "pref": "13",
+   "name": "北区",
+   "slug": "kita",
+   "yomi": "きたく"
   }
  ]
 }/*MUNIS-END*/;
