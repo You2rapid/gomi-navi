@@ -142,6 +142,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "杉並区",
    "slug": "suginami",
    "yomi": "すぎなみく"
+  },
+  {
+   "code": "13119",
+   "pref": "13",
+   "name": "板橋区",
+   "slug": "itabashi",
+   "yomi": "いたばしく"
   }
  ]
 }/*MUNIS-END*/;
