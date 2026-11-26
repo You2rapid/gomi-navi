@@ -156,6 +156,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "八王子市",
    "slug": "hachioji",
    "yomi": "はちおうじし"
+  },
+  {
+   "code": "13108",
+   "pref": "13",
+   "name": "江東区",
+   "slug": "koto",
+   "yomi": "こうとうく"
   }
  ]
 }/*MUNIS-END*/;
