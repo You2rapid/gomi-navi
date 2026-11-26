@@ -16,6 +16,11 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "code": "39",
    "name": "高知県",
    "slug": "kochi"
+  },
+  {
+   "code": "13",
+   "name": "東京都",
+   "slug": "tokyo"
   }
  ],
  "munis": [
@@ -95,6 +100,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "高知市",
    "slug": "kochi",
    "yomi": "こうちし"
+  },
+  {
+   "code": "13112",
+   "pref": "13",
+   "name": "世田谷区",
+   "slug": "setagaya",
+   "yomi": "せたがやく"
   }
  ]
 }/*MUNIS-END*/;
