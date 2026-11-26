@@ -135,6 +135,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "足立区",
    "slug": "adachi",
    "yomi": "あだちく"
+  },
+  {
+   "code": "13115",
+   "pref": "13",
+   "name": "杉並区",
+   "slug": "suginami",
+   "yomi": "すぎなみく"
   }
  ]
 }/*MUNIS-END*/;
