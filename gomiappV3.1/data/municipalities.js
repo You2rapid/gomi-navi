@@ -170,6 +170,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "葛飾区",
    "slug": "katsushika",
    "yomi": "かつしかく"
+  },
+  {
+   "code": "13109",
+   "pref": "13",
+   "name": "品川区",
+   "slug": "shinagawa",
+   "yomi": "しながわく"
   }
  ]
 }/*MUNIS-END*/;
