@@ -107,6 +107,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "世田谷区",
    "slug": "setagaya",
    "yomi": "せたがやく"
+  },
+  {
+   "code": "13120",
+   "pref": "13",
+   "name": "練馬区",
+   "slug": "nerima",
+   "yomi": "ねりまく"
   }
  ]
 }/*MUNIS-END*/;
