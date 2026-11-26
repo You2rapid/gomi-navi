@@ -584,7 +584,10 @@ table.pt{table-layout:fixed;min-width:0;width:100%} table.pt th,table.pt td{over
 table.pt .c,table.pt td.name{white-space:normal} table.pt .c b{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 table.pt th{white-space:normal}
 details.pg .wrap{overflow-x:visible}
-label.pub{display:inline-flex;align-items:center;gap:3px;margin-top:4px;font-size:12px;color:var(--muted);cursor:pointer}
+label.pub{display:flex;width:fit-content;align-items:center;gap:3px;margin-top:4px;font-size:12px;color:var(--muted);cursor:pointer}
+td.name a{display:block}
+label.pubpref{float:right;display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--muted);cursor:pointer}
+label.pubpref small{margin-left:2px}
 tr.hid td{opacity:.55} tr.hid label.pub{opacity:1;color:var(--bad);font-weight:700}
 p.tools{margin:12px 0 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center} p.tools .sp{flex:1}
 p.tools label{font-size:13px;color:var(--muted)} p.tools select{font-size:13px;margin-left:4px}
@@ -607,6 +610,37 @@ window.addEventListener("hashchange", openHash); openHash();
 const SERVED = location.protocol.startsWith("http");
 if (!SERVED) document.querySelector(".admin-off").hidden = false;
 const NY = new Date().getMonth() >= 3 ? new Date().getFullYear() + 1 : new Date().getFullYear();   // 次の年度
+// 県ごと公開：一部だけ公開している県は、チェックを「－」（どちらでもない）で出す
+document.querySelectorAll("input[data-pubpref][data-mixed]").forEach(x => x.indeterminate = true);
+// 県の行（折りたたみの見出し）のチェックをおしたときは、県の表を開いたり閉じたりしない
+document.addEventListener("click", e => {
+  if (!e.target.closest("label.pubpref")) return;
+  e.preventDefault();
+  const cb = e.target.closest("label.pubpref").querySelector("input");
+  if (cb.disabled) return;
+  cb.checked = cb.indeterminate ? true : !cb.checked; cb.indeterminate = false;
+  pubPref(cb);
+});
+async function pubPref(cb){
+  const det = cb.closest("details.pg"), pref = det.dataset.pref, on = cb.checked;
+  const log = document.getElementById("log-top"); log.hidden = false;
+  if (!SERVED){ log.textContent = "公開を変えるには、python gomiappV3.1/tools/admin.py で開いてください。"; location.reload(); return; }
+  cb.disabled = true;
+  try {
+    const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({tool:"publish", pref, on})});
+    log.textContent = await r.text();
+    if (r.ok) det.querySelectorAll("tr[data-code]").forEach(tr => { tr.classList.toggle("hid", !on); tr.querySelector("input[data-pub]").checked = on; });
+    const n = det.querySelectorAll("tr[data-code]").length;
+    det.querySelector("label.pubpref small").textContent = `（公開 ${r.ok && on ? n : r.ok ? 0 : "?"}/${n}）`;
+  } catch(err){ log.textContent = "変えられませんでした：" + err + "（admin.py が止まっていないか見てください）"; }
+  cb.disabled = false;
+}
+// 1つの自治体を変えたら、県のチェックと数も直す
+function syncPref(det){
+  const all = [...det.querySelectorAll("input[data-pub]")], n = all.filter(x => x.checked).length, cb = det.querySelector("input[data-pubpref]");
+  cb.checked = n === all.length; cb.indeterminate = n > 0 && n < all.length;
+  det.querySelector("label.pubpref small").textContent = `（公開 ${n}/${all.length}）`;
+}
 // 公開する・しない（data/municipalities.js の "hidden"）。admin.py で開いたときだけ変えられる
 document.addEventListener("change", async e => {
   const cb = e.target.closest("input[data-pub]"); if (!cb) return;
@@ -618,6 +652,7 @@ document.addEventListener("change", async e => {
     const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({tool:"publish", code:tr.dataset.code, on:cb.checked})});
     log.textContent = await r.text();
     if (r.ok) tr.classList.toggle("hid", !cb.checked); else cb.checked = !cb.checked;
+    syncPref(tr.closest("details.pg"));
   } catch(err){ cb.checked = !cb.checked; log.textContent = "変えられませんでした：" + err + "（admin.py が止まっていないか見てください）"; }
   cb.disabled = false;
 });
@@ -809,8 +844,12 @@ def main():
         nb = sum(1 for _, row, _ in grp for k, _ in cols if k in row and row[k][0] == BAD)
         nw = sum(1 for _, row, _ in grp for k, _ in cols if k in row and row[k][0] == WARN)
         tags = (f'<span class="tag bad">赤 {nb}</span>' if nb else "") + (f'<span class="tag warn">黄 {nw}</span>' if nw else "")             or '<span class="tag ok">問題なし</span>'
-        body.append(f'<details class="pg" id="t-{h(pcode)}"><summary><b>{h(pcode)} {h(grp[0][0].pref_name)}</b>'
-                    f'<span class="cnt">{len(grp)} 自治体</span>{tags}</summary><div class="wrap">{tbl}{head}<tbody>')
+        npub = sum(1 for m, _, _ in grp if m.code not in hidden)
+        pstate = "checked" if npub == len(grp) else "" if npub == 0 else "data-mixed"
+        body.append(f'<details class="pg" id="t-{h(pcode)}" data-pref="{h(pcode)}"><summary><b>{h(pcode)} {h(grp[0][0].pref_name)}</b>'
+                    f'<span class="cnt">{len(grp)} 自治体</span>{tags}'
+                    f'<label class="pubpref" title="この県の自治体をまとめて公開する・しない"><input type="checkbox" data-pubpref {pstate}> 県ごと公開'
+                    f'<small>（公開 {npub}/{len(grp)}）</small></label></summary><div class="wrap">{tbl}{head}<tbody>')
         for m, row, notes in grp:
             keys = {n[3] for n in notes}   # くわしくへ飛べる列（商用利用・住所）
             act = {"src": act_btn("latest", "最新をチェック", f"市のサイトに{reiwa(now_fy + 1)}のカレンダーが出ているか見る（保存しない）"),

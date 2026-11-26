@@ -51,23 +51,27 @@ def can_switch(today=None):
     return (today or dt.date.today()) >= dt.date(next_year(today), 3, 1)
 
 
-def set_published(code, on):
+def set_published(code, on, pref=None):
     """data/municipalities.js の自治体に "hidden": true を付ける（公開しない）か外す（公開する）。
+    pref（県コード）を渡すと、その県の自治体をまとめて変える。
     公開しない自治体は、アプリの市町村の一覧・今いる場所から探すに出ない（データは残る）"""
     path = M.DATA / "municipalities.js"
     text = path.read_text(encoding="utf-8")
     m = re.search(r"/\*MUNIS-START\*/(.*)/\*MUNIS-END\*/", text, re.S)
     reg = json.loads(m.group(1))
-    hit = next((x for x in reg["munis"] if x["code"] == code), None)
-    if not hit:
-        raise ValueError("自治体コードがちがいます")
-    if on:
-        hit.pop("hidden", None)
-    else:
-        hit["hidden"] = True
+    hits = [x for x in reg["munis"] if (x["pref"] == pref if pref else x["code"] == code)]
+    if not hits:
+        raise ValueError("自治体コード（県コード）がちがいます")
+    for hit in hits:
+        if on:
+            hit.pop("hidden", None)
+        else:
+            hit["hidden"] = True
     body = json.dumps(reg, ensure_ascii=False, indent=1)
     path.write_text(text[:m.start(1)] + body + text[m.end(1):], encoding="utf-8", newline=NL)
-    return (f"{hit['name']}（{code}）を{'公開する' if on else '公開しない'}にしました（data/municipalities.js）。{NL}"
+    what = (f"{next(p['name'] for p in reg['prefs'] if p['code'] == pref)}の {len(hits)} 自治体" if pref
+            else f"{hits[0]['name']}（{code}）")
+    return (f"{what}を{'公開する' if on else '公開しない'}にしました（data/municipalities.js）。{NL}"
             "アプリに反映するには、GitHub Desktop で Commit → Push origin。")
 
 
@@ -137,7 +141,8 @@ class Handler(BaseHTTPRequestHandler):
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
             if req.get("tool") == "publish":
                 with LOCK:
-                    return self.send(200, set_published(str(req.get("code")), bool(req.get("on"))))
+                    return self.send(200, set_published(str(req.get("code")), bool(req.get("on")),
+                                                        str(req["pref"]) if req.get("pref") else None))
             plan = steps(req.get("tool"), req.get("code"))
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
             return self.send(400, f"動かせません：{e}")
@@ -178,6 +183,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    global PORT
+    # --port=8768 のように付けると、ちがう番号で開く（ためしに動かすとき。ふだんは 8766）
+    PORT = next((int(a[7:]) for a in sys.argv if a.startswith("--port=")), PORT)
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     url = f"http://{HOST}:{PORT}/"
     print(f"管理アプリ：{url}  （止めるときは Ctrl+C）")
