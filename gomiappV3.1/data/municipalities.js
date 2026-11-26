@@ -149,6 +149,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "板橋区",
    "slug": "itabashi",
    "yomi": "いたばしく"
+  },
+  {
+   "code": "13201",
+   "pref": "13",
+   "name": "八王子市",
+   "slug": "hachioji",
+   "yomi": "はちおうじし"
   }
  ]
 }/*MUNIS-END*/;
