@@ -908,6 +908,9 @@ function renderCal(){
   const v = $("#view-cal");
   syncCity();
   if (!CAL){ v.innerHTML = `<div class="empty">収集日データが読み込めませんでした。</div>`; return; }
+  // 登録したほかの市のデータがまだ読み込み中なら待つ（ちがう市の地区を2つ以上登録していると、開いたときに先に読めた市から描こうとして、
+  // まだない市の名前を読んでエラーになっていた）。読み込みが終われば start() か useCity() がもう一度描く
+  if (calState.areas.some(a => !CITIES[a.c])) return;
   if (!calState.area || calState.picking){ renderPicker(); return; }
   const t = now();
   const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
@@ -1855,6 +1858,7 @@ $("#themeBtn").addEventListener("click", () => {
   try { t ? localStorage.setItem("gomi-theme", t) : localStorage.removeItem("gomi-theme"); } catch(e){}
 });
 
+let started = false;   // start() で、登録した市のデータを読み終わったか
 async function start(){
   const need = [...new Set([calState.city, ...calState.areas.map(a => a.c)])].filter(c => MUNI[c]);
   if (!need.length) need.push(DEFAULT_CITY);
@@ -1872,6 +1876,7 @@ async function start(){
   if (calState.area) calState.city = calState.area.c;
   if (!CITIES[calState.city]) calState.city = need.find(c => CITIES[c]);
   calState.region = (calState.area && calState.area.r) || CITIES[calState.city].regions[0] || "";
+  started = true;
   renderCal(); setTab("cal");
   if (NATIVE){
     // ストアのアプリ：通知を予約し直す（先の分を足す）。自治体の一覧・祝日は新しいものを取ってきて、次に開いたときから使う
@@ -1882,7 +1887,7 @@ async function start(){
 start();
 // 日付が変わったら（アプリを開きっぱなしでも）表示を更新
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return;
+  if (document.hidden || !started) return;   // 読み込み中に画面にもどったときは、start() が描くので待つ
   if (state.tab === "cal" && !calState.picking) renderCal();
   if (NATIVE) scheduleNative();
 });
