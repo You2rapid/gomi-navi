@@ -128,6 +128,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "江戸川区",
    "slug": "edogawa",
    "yomi": "えどがわく"
+  },
+  {
+   "code": "13121",
+   "pref": "13",
+   "name": "足立区",
+   "slug": "adachi",
+   "yomi": "あだちく"
   }
  ]
 }/*MUNIS-END*/;
