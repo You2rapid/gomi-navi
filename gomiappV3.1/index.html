@@ -181,7 +181,9 @@ a{color:var(--accent)}
 .day-card .when b,.day-card .when span,.day-card .when em{white-space:nowrap}
 /* ごみの名前と袋の色が1行に入らないときは、袋の色を次の行（右寄せ）へ */
 .day-card .big .tag{flex-wrap:wrap;row-gap:2px}
-.day-card .big .tag .tn{white-space:nowrap}
+.day-card .big .tag .tn{white-space:normal;overflow-wrap:anywhere;min-width:0}
+.day-card{min-width:0} .day-card .big .tag{min-width:0;max-width:100%}
+@media (max-width:599px){.day-card .big .tag small{flex-basis:100%;margin-left:0;white-space:normal}}
 .day-card .note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
 
 .card{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:12px 14px;margin:0 0 12px}
@@ -211,6 +213,11 @@ a{color:var(--accent)}
 .cal .d .n{font-size:13px;font-weight:700;padding-left:3px;line-height:1.3}
 .cal .d .tag{font-size:10.5px;padding:2px 1px;border-radius:4px;letter-spacing:-.02em;white-space:normal;overflow-wrap:anywhere;line-height:1.15;text-align:center;min-width:0}
 .cal .d{min-width:0}
+.cal .d .tag{flex-direction:column}
+.cal .d .tag .ln{display:block;white-space:nowrap}
+.cal .d .tag.fit4{font-size:9.5px;letter-spacing:-.06em}
+.cal .d .tag.fit5{font-size:8.5px;letter-spacing:-.08em}
+@media (min-width:600px){.cal .d .tag.fit4{font-size:11px}.cal .d .tag.fit5{font-size:10px}}
 /* 最後の週のあいたマスに出す、次の月の日（うすく） */
 .cal .d.next{opacity:.5;background:transparent;border:1px dashed var(--line)}
 .cal .d.next .n{font-weight:400}
@@ -906,6 +913,13 @@ const catsOn = d => (sched().days[ymd(d)] || []).slice().sort((a,b) => CAL_ORDER
 const movedOn = d => sched().moved[ymd(d)] || [];
 const inRange = d => { const k = ymd(d); return k >= `${CAL.year}-04-01` && k <= `${CAL.year+1}-03-31`; };
 function tag(c, cls = ""){ return `<span class="tag${ink(c)} ${cls}" style="--cc:${cssVar(c)}">${esc(SHORT[c])}</span>`; }
+// 月のカレンダーのマスの札：市の書き方のまま、「・」「／」のあとで行を分ける（金属・陶器 → 「金属・」「陶器」）。
+// 長い部分（ダンボール など）は、文字を少し小さくして1行に入れる
+function calTag(c){
+  const parts = SHORT[c].split(/(?<=[・／])/), longest = Math.max(...parts.map(p => p.replace(/[・／]$/, "").length));
+  const fit = longest >= 5 ? " fit5" : longest === 4 ? " fit4" : "";
+  return `<span class="tag${ink(c)}${fit}" style="--cc:${cssVar(c)}">${parts.map(p => `<span class="ln">${esc(p)}</span>`).join("")}</span>`;
+}
 const schedLabel = s => CITY.schedLabel(s);
 
 function choiceHtml(a){
@@ -985,7 +999,7 @@ function renderCal(){
     const cats = catsOn(d), mv = movedOn(d);
     const cls = ["d", d.getDay() === 0 ? "sun" : d.getDay() === 6 ? "sat" : "", HOLIDAYS.has(k) ? "hol" : "", d < today ? "past" : "", +d === +today ? "is-today" : ""].filter(Boolean).join(" ");
     const label = `${mo+1}月${day}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`;
-    html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => tag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}${undecided(d) ? `<span class="mv und">未定</span>` : ""}${NATIVE && hasDay(k) ? `<span class="bell" aria-label="通知あり">🔔</span>` : ""}</button>`;
+    html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => calTag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}${undecided(d) ? `<span class="mv und">未定</span>` : ""}${NATIVE && hasDay(k) ? `<span class="bell" aria-label="通知あり">🔔</span>` : ""}</button>`;
   }
   // 最後の週のあいたマスに、次の月のはじめの日をうすく出す（年度の中だけ。タップすると、その日の出し方が見られる）
   const rest = (7 - (first.getDay() + ndays) % 7) % 7;
@@ -993,7 +1007,7 @@ function renderCal(){
     const d = new Date(y, mo + 1, i), k = ymd(d);
     if (!inRange(d)){ html += `<div class="d blank"></div>`; continue; }
     const cats = catsOn(d);
-    html += `<button class="d next" data-day="${k}" aria-label="${esc(`${d.getMonth()+1}月${i}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`)}"><span class="n">${d.getMonth()+1}/${i}</span>${cats.map(c => tag(c)).join("")}${undecided(d) ? `<span class="mv und">未定</span>` : ""}</button>`;
+    html += `<button class="d next" data-day="${k}" aria-label="${esc(`${d.getMonth()+1}月${i}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`)}"><span class="n">${d.getMonth()+1}/${i}</span>${cats.map(c => calTag(c)).join("")}${undecided(d) ? `<span class="mv und">未定</span>` : ""}</button>`;
   }
   html += `</div><div class="legend">` + CAL_ORDER.filter(c => sched().rules[c]).map(c => `<span><i style="--cc:${cssVar(c)}"></i>${esc(SHORT[c])}＝${esc(LONG[c])}</span>`).join("") + `</div>
     <p class="small" style="margin:10px 0 0">日付をタップすると、出せるごみの詳しい出し方が見られます。${Object.keys(sched().moved).length ? "祝日などで収集日が移った日には「振替」と表示しています。" : ""}${CAL.yearEnd && CAL.yearEnd.tentative ? `年末年始（${md(new Date(CAL.yearEnd.off[0] + "T00:00"))}〜${md(new Date(CAL.yearEnd.off[1] + "T00:00"))}）の収集日は、市の発表を待っているので「未定」と表示しています。` : ""}</p></div>`;
