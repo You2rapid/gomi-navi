@@ -14,6 +14,9 @@ android {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            // カメラ判定の AI データ（ai/model/*.bin・約14MB）は圧縮しない。圧縮されると、アプリの中で途中までしか読めず、
+            // 「the tensor should have … values but has …」のエラーになる
+            noCompress 'bin'
         }
     }
     buildTypes {
