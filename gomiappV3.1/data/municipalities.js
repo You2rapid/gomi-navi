@@ -184,6 +184,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "北区",
    "slug": "kita",
    "yomi": "きたく"
+  },
+  {
+   "code": "13104",
+   "pref": "13",
+   "name": "新宿区",
+   "slug": "shinjuku",
+   "yomi": "しんじゅくく"
   }
  ]
 }/*MUNIS-END*/;
