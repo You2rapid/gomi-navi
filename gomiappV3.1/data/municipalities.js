@@ -212,6 +212,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "豊島区",
    "slug": "toshima",
    "yomi": "としまく"
+  },
+  {
+   "code": "13110",
+   "pref": "13",
+   "name": "目黒区",
+   "slug": "meguro",
+   "yomi": "めぐろく"
   }
  ]
 }/*MUNIS-END*/;
