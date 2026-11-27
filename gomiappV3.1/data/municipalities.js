@@ -191,6 +191,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "新宿区",
    "slug": "shinjuku",
    "yomi": "しんじゅくく"
+  },
+  {
+   "code": "13209",
+   "pref": "13",
+   "name": "町田市",
+   "slug": "machida",
+   "yomi": "まちだし"
   }
  ]
 }/*MUNIS-END*/;
