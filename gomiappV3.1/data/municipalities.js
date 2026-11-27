@@ -205,6 +205,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "中野区",
    "slug": "nakano",
    "yomi": "なかのく"
+  },
+  {
+   "code": "13116",
+   "pref": "13",
+   "name": "豊島区",
+   "slug": "toshima",
+   "yomi": "としまく"
   }
  ]
 }/*MUNIS-END*/;
