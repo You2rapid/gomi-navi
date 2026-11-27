@@ -200,7 +200,7 @@ a{color:var(--accent)}
 .month-hd button{border:1.5px solid var(--line);background:var(--surface);width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:18px}
 .month-hd button:disabled{opacity:.3;cursor:default}
 .month-hd .to-today{width:auto;border-radius:999px;padding:0 12px;font-size:13px;font-weight:700}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
 .cal .wd{font-size:12px;font-weight:700;text-align:center;color:var(--muted);padding:2px 0}
 .cal .wd.sun,.cal .d.sun .n,.cal .d.hol .n{color:#d6403a}
 .cal .wd.sat,.cal .d.sat .n{color:#2f6fc4}
@@ -209,7 +209,11 @@ a{color:var(--accent)}
 .cal .d.past{opacity:.45}
 .cal .d.is-today{border-color:var(--accent);background:var(--surface)}
 .cal .d .n{font-size:13px;font-weight:700;padding-left:3px;line-height:1.3}
-.cal .d .tag{font-size:10.5px;padding:2px 0;border-radius:4px;letter-spacing:-.02em}
+.cal .d .tag{font-size:10.5px;padding:2px 1px;border-radius:4px;letter-spacing:-.02em;white-space:normal;overflow-wrap:anywhere;line-height:1.15;text-align:center;min-width:0}
+.cal .d{min-width:0}
+/* 最後の週のあいたマスに出す、次の月の日（うすく） */
+.cal .d.next{opacity:.5;background:transparent;border:1px dashed var(--line)}
+.cal .d.next .n{font-weight:400}
 .cal .d .mv{font-size:9px;font-weight:800;text-align:center;color:var(--muted);line-height:1}
 .cal .d .mv.und{color:#b26a00}
 @media (min-width:600px){.cal .d{min-height:78px}.cal .d .tag{font-size:12px}}
@@ -983,6 +987,14 @@ function renderCal(){
     const label = `${mo+1}月${day}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`;
     html += `<button class="${cls}" data-day="${k}" aria-label="${esc(label)}"><span class="n">${day}</span>${cats.map(c => tag(c)).join("")}${mv.length ? `<span class="mv">振替</span>` : ""}${undecided(d) ? `<span class="mv und">未定</span>` : ""}${NATIVE && hasDay(k) ? `<span class="bell" aria-label="通知あり">🔔</span>` : ""}</button>`;
   }
+  // 最後の週のあいたマスに、次の月のはじめの日をうすく出す（年度の中だけ。タップすると、その日の出し方が見られる）
+  const rest = (7 - (first.getDay() + ndays) % 7) % 7;
+  for (let i = 1; i <= rest; i++){
+    const d = new Date(y, mo + 1, i), k = ymd(d);
+    if (!inRange(d)){ html += `<div class="d blank"></div>`; continue; }
+    const cats = catsOn(d);
+    html += `<button class="d next" data-day="${k}" aria-label="${esc(`${d.getMonth()+1}月${i}日 ${cats.length ? cats.map(c => LONG[c]).join("、") : "収集なし"}`)}"><span class="n">${d.getMonth()+1}/${i}</span>${cats.map(c => tag(c)).join("")}${undecided(d) ? `<span class="mv und">未定</span>` : ""}</button>`;
+  }
   html += `</div><div class="legend">` + CAL_ORDER.filter(c => sched().rules[c]).map(c => `<span><i style="--cc:${cssVar(c)}"></i>${esc(SHORT[c])}＝${esc(LONG[c])}</span>`).join("") + `</div>
     <p class="small" style="margin:10px 0 0">日付をタップすると、出せるごみの詳しい出し方が見られます。${Object.keys(sched().moved).length ? "祝日などで収集日が移った日には「振替」と表示しています。" : ""}${CAL.yearEnd && CAL.yearEnd.tentative ? `年末年始（${md(new Date(CAL.yearEnd.off[0] + "T00:00"))}〜${md(new Date(CAL.yearEnd.off[1] + "T00:00"))}）の収集日は、市の発表を待っているので「未定」と表示しています。` : ""}</p></div>`;
   if (!inRange(today)) html += `<div class="empty">このアプリには${nendo(CAL)}（${CAL.year}年4月〜${CAL.year + 1}年3月）の収集日が入っています。新しい年度のカレンダーが出たら更新してください。</div>`;
@@ -1672,67 +1684,6 @@ const AI_MAP = {
  "cucumber","artichoke","bell pepper","cardoon","mushroom","Granny Smith","strawberry","orange","lemon","fig","pineapple",
  "banana","jackfruit","custard apple","pomegranate","carbonara","chocolate sauce","dough","meat loaf","pizza","potpie",
  "burrito","corn","ear"].forEach(k => AI_MAP[k] = FOOD);
-// AI が答えられるのに、表になかった物（家庭から出やすいもの）
-Object.assign(AI_MAP, {
-  "red wine":"ワインのびん|ガラスびん", "espresso":"コーヒー（飲み残し）|生ごみ", "eggnog":"飲み物の容器|紙パック,ペットボトル",
-  "acorn":"どんぐり・木の実|落ち葉", "daisy":"草花|草花,落ち葉", "rapeseed":"草花|草花,落ち葉",
-  "violin":"楽器|楽器", "cello":"楽器|楽器", "accordion":"楽器|楽器", "banjo":"楽器|楽器", "harp":"楽器|楽器", "drum":"楽器|楽器",
-  "steel drum":"楽器|楽器", "sax":"楽器|楽器", "trombone":"楽器|楽器", "French horn":"楽器|楽器", "cornet":"楽器|楽器",
-  "oboe":"楽器|楽器", "bassoon":"楽器|楽器", "maraca":"楽器|楽器,おもちゃ", "marimba":"楽器|楽器", "panpipe":"楽器|楽器",
-  "gong":"楽器|楽器", "chime":"風鈴・チャイム|風鈴", "drumstick":"楽器|楽器",
-  "crate":"木箱・ケース|木箱,コンテナ", "barrel":"たる|たる,ポリタンク", "rain barrel":"たる・ポリタンク|ポリタンク",
-  "beaker":"ガラス製品|ガラス製品", "Petri dish":"ガラス・プラスチックの容器|ガラス製品", "cocktail shaker":"金属製品|金属",
-  "buckle":"ベルト・バックル|ベルト", "hook":"フック|フック,金属", "carpenter's kit":"工具|工具", "plane":"工具（かんな）|工具",
-  "letter opener":"ペーパーナイフ|刃物,ナイフ", "magnetic compass":"方位磁石|方位磁石,磁石", "slide rule":"定規|定規,ものさし",
-  "dial telephone":"電話機|電話機", "switch":"スイッチ・電気部品|電気製品", "tripod":"三脚|三脚",
-  "reel":"釣り具（リール）|釣り具,リール", "snorkel":"シュノーケル・ゴム製品|ゴム製品", "bathing cap":"水泳帽|水泳帽,ゴム製品",
-  "shower cap":"シャワーキャップ|シャワーキャップ", "gasmask":"マスク|マスク", "oxygen mask":"マスク|マスク", "ski mask":"目出し帽・マスク|帽子",
-  "bib":"よだれかけ|よだれかけ,衣類", "feather boa":"衣類|衣類", "knee pad":"サポーター|サポーター", "neck brace":"サポーター|サポーター",
-  "necklace":"アクセサリー|アクセサリー,ネックレス", "thimble":"指ぬき・裁縫道具|裁縫道具", "piggy bank":"貯金箱|貯金箱",
-  "pinwheel":"かざぐるま・おもちゃ|おもちゃ", "swing":"ブランコ・遊具|遊具", "unicycle":"一輪車|一輪車,自転車",
-  "mousetrap":"ねずみとり|ねずみとり", "medicine chest":"救急箱|救急箱", "mailbox":"郵便受け|郵便受け,ポスト",
-  "mountain tent":"テント|テント", "crutch":"松葉づえ|松葉づえ,つえ", "swab":"モップ|モップ", "bathtub":"浴槽・ベビーバス|浴槽,ベビーバス",
-  "file":"キャビネット（家具）|キャビネット,@粗大", "car mirror":"自動車の部品|自動車部品", "disk brake":"自動車の部品|自動車部品"
-});
-// 探すことばの言いかえ（市によって品目の書き方がちがう：「かさ」と「傘」、「くつした」と「靴下」など）。
-// はじめのことばで品目が見つからない市では、ここのことばを順にためす
-const CAM_ALT = {
-  "かさ":["傘","カサ"], "くつした":["靴下","衣類","布類"], "くぎ":["釘","クギ"], "ねじ":["ネジ","螺子","ボルト"], "かぎ":["鍵","カギ","キー"],
-  "かなづち":["金づち","金槌","ハンマー"], "なた":["鉈","かま","鎌","刃物"], "かつら":["ウィッグ"], "たらい":["タライ","バケツ"],
-  "たんす":["タンス","箪笥","洋服タンス","チェスト"], "すだれ":["簾","よしず"], "ごみ箱":["ゴミ箱","ごみばこ","くずかご","ダストボックス"],
-  "おむつ":["紙おむつ","オムツ"], "お玉":["おたま","玉じゃくし","調理器具"], "はかり":["秤","体重計","計量器"],
-  "Tシャツ":["シャツ","衣類","衣服","洋服"], "服":["衣類","衣服","洋服"], "スカート":["衣類","衣服","洋服"], "セーター":["衣類","衣服","ニット"],
-  "下着類":["下着","肌着","衣類"], "着物":["和服","衣類"], "マフラー":["衣類","布類"], "ブーツ":["長靴","靴","くつ"],
-  "本類":["本","書籍","雑誌"], "段ボール":["ダンボール","段ボール箱"], "紙容器":["紙箱","紙パック","紙製容器"],
-  "ガラスびん":["びん","ビン","瓶","ガラス瓶"], "花びん":["花瓶","かびん","花器"], "ガラス製品":["ガラス","コップ","グラス"],
-  "陶磁器類":["陶磁器","陶器","茶わん","茶碗","食器"], "調味料の容器":["調味料","しょうゆ","醤油","マヨネーズ","ソース"],
-  "薬の容器":["薬","錠剤","ボトル"], "化粧品の容器":["化粧品","化粧びん","クリーム"], "口紅":["化粧品","リップ"],
-  "インスタント食品の袋":["カップめん","カップ麺","菓子袋","袋"], "菓子袋":["お菓子","菓子","スナック","袋"],
-  "トイレットペーパーの芯":["トイレットペーパー","芯","紙管"], "調理器具":["フライパン","鍋","なべ","包丁"],
-  "小型家電":["小型家電品","家電品","家電","電化製品","電気製品","電子機器"], "電気製品":["電化製品","電気器具","家電","家電品"], "食器洗い機":["食器洗","食洗機","家電"], "CDプレーヤー":["CD","ラジカセ","オーディオ","ステレオ"],
-  "ハードディスク":["パソコン","外付け","記録媒体"], "ルーター":["ルータ","モデム","パソコン周辺機器"], "タブレット":["タブレット端末","スマートフォン","携帯電話"],
-  "電気スタンド":["スタンド","照明","電灯","ライト"], "懐中電灯":["ライト","電灯"], "電動工具":["工具","ドリル"], "芝刈り機":["芝刈","草刈機","草刈り機"],
-  "オイルエレメント":["オイルフィルター","エンジンオイル","自動車部品","カー用品"], "文房具":["文具","ボールペン","鉛筆","筆記用具"],
-  "筆":["ふで","筆記用具"], "ファイル":["クリアファイル","バインダー"], "栓抜き":["せんぬき","缶切り"], "缶切り":["かんきり","栓抜き"],
-  "ヘアピン":["ピン","髪留め","ヘアゴム","アクセサリー"], "ゴム製品":["ゴム","長靴","ホース"], "砂時計":["時計","置物"],
-  "ハーモニカ":["楽器","おもちゃ"], "楽器":["ギター","ピアノ","おもちゃ"], "かご":["籠","カゴ","バスケット"], "マスク":["衛生用品"],
-  "ロウソク":["ろうそく","蝋燭","キャンドル"], "注射器":["注射","注射針","在宅医療"], "リュック":["リュックサック","かばん","鞄","バッグ"],
-  "サングラス":["めがね","眼鏡","メガネ"], "風船":["ゴム風船","ふうせん","おもちゃ"], "寝袋":["シュラフ","布団","ふとん"],
-  "ばんそうこう":["絆創膏","ガーゼ","包帯"], "バッグ":["かばん","鞄","カバン","バック"], "チェーン":["鎖","くさり"],
-  "虫めがね":["虫眼鏡","ルーペ","めがね"], "革製品":["皮革","革","かばん","靴"], "木箱":["箱","木くず","木製品"], "たる":["樽","木製品"],
-  "方位磁石":["磁石","コンパス"], "定規":["ものさし","物差し","文房具"], "三脚":["カメラ","金属"], "釣り具":["釣りざお","釣竿","リール"],
-  "水泳帽":["帽子","ゴム製品"], "シャワーキャップ":["ビニール","帽子"], "よだれかけ":["衣類","布類"], "サポーター":["衣類","布類"],
-  "アクセサリー":["ネックレス","指輪","装飾品","装身具","宝石"], "ネックレス":["アクセサリー","装身具"], "フック":["金属","金具"], "風鈴":["ガラス製品","陶器"], "裁縫道具":["針","はさみ","糸"], "貯金箱":["陶器","おもちゃ"], "遊具":["おもちゃ","ブランコ"],
-  "一輪車":["自転車"], "ねずみとり":["殺虫剤","ねずみ"], "救急箱":["箱","プラスチック製品"], "郵便受け":["ポスト","金属"],
-  "テント":["キャンプ用品","レジャーシート"], "松葉づえ":["つえ","杖","ステッキ"], "モップ":["ほうき","掃除用具"], "浴槽":["風呂","ベビーバス"],
-  "キャビネット":["たんす","タンス","棚"], "自動車部品":["カー用品","タイヤ","バッテリー"], "草花":["草","花","落ち葉","枝"], "落ち葉":["草","葉","枝","剪定枝"]
-};
-// 品目を探す：はじめのことばで見つからなければ、言いかえをためす
-function camFind(q){
-  let r = findItems(q);
-  for (const a of CAM_ALT[q] || []){ if (r.length) break; r = findItems(a); }
-  return r;
-}
 
 const cam = {model:null, loading:null, url:null};
 function loadScript(src){
@@ -1842,7 +1793,7 @@ function renderGuesses(out, preds){
     const cats = g.qs.filter(q => q[0] === "@").map(q => CITY.aiCat[q.slice(1)] || q.slice(1)).filter(c => CATS[c]);
     const items = [], ids = new Set();
     for (const q of g.qs.filter(q => q[0] !== "@")){
-      for (const it of camFind(q)){ if (!ids.has(it.id)){ ids.add(it.id); items.push(it); } }
+      for (const it of findItems(q)){ if (!ids.has(it.id)){ ids.add(it.id); items.push(it); } }
     }
     if (cats.length) html += `<ul class="items cam-items">${cats.map(c => `<li><button class="item" data-filter="${esc(c)}">
       <span class="txt"><span class="nm">${esc(CATS[c].name)}の品目を見る</span></span><span class="bcol">${badge(c)}</span></button></li>`).join("")}</ul>`;
