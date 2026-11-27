@@ -215,9 +215,8 @@ a{color:var(--accent)}
 .cal .d{min-width:0}
 .cal .d .tag{flex-direction:column}
 .cal .d .tag .ln{display:block;white-space:nowrap}
-.cal .d .tag.fit4{font-size:9.5px;letter-spacing:-.06em}
-.cal .d .tag.fit5{font-size:8.5px;letter-spacing:-.08em}
-@media (min-width:600px){.cal .d .tag.fit4{font-size:11px}.cal .d .tag.fit5{font-size:10px}}
+.cal .d .tag .ln.f4{font-size:9.5px;letter-spacing:-.06em}
+@media (min-width:600px){.cal .d .tag .ln.f4{font-size:inherit;letter-spacing:inherit}}
 /* 最後の週のあいたマスに出す、次の月の日（うすく） */
 .cal .d.next{opacity:.5;background:transparent;border:1px dashed var(--line)}
 .cal .d.next .n{font-weight:400}
@@ -914,11 +913,17 @@ const movedOn = d => sched().moved[ymd(d)] || [];
 const inRange = d => { const k = ymd(d); return k >= `${CAL.year}-04-01` && k <= `${CAL.year+1}-03-31`; };
 function tag(c, cls = ""){ return `<span class="tag${ink(c)} ${cls}" style="--cc:${cssVar(c)}">${esc(SHORT[c])}</span>`; }
 // 月のカレンダーのマスの札：市の書き方のまま、「・」「／」のあとで行を分ける（金属・陶器 → 「金属・」「陶器」）。
-// 長い部分（ダンボール など）は、文字を少し小さくして1行に入れる
+// 1行は3文字まで。4文字の言葉は文字を少し小さくして1行、5文字以上は3文字ずつで折り返す（ダンボール → ダンボ／ール）
 function calTag(c){
-  const parts = SHORT[c].split(/(?<=[・／])/), longest = Math.max(...parts.map(p => p.replace(/[・／]$/, "").length));
-  const fit = longest >= 5 ? " fit5" : longest === 4 ? " fit4" : "";
-  return `<span class="tag${ink(c)}${fit}" style="--cc:${cssVar(c)}">${parts.map(p => `<span class="ln">${esc(p)}</span>`).join("")}</span>`;
+  const lines = [];
+  for (const part of SHORT[c].split(/(?<=[・／])|(?=[(（])/)){   // 「・」のあとと「(」の前で分ける
+    const m = part.match(/^(.*?)([・／]?)$/), word = [...m[1]], mark = m[2];
+    if (word.length <= 4){ lines.push([word.join("") + mark, word.length === 4]); continue; }
+    for (let i = 0; i < word.length; i += 3) lines.push([word.slice(i, i + 3).join("") + (i + 3 >= word.length ? mark : ""), false]);
+  }
+  // 「)」だけの行は作らない（前の行に付ける）
+  for (let i = lines.length - 1; i > 0; i--) if (/^[)）]+[・／]?$/.test(lines[i][0])){ lines[i - 1][0] += lines[i][0]; lines.splice(i, 1); }
+  return `<span class="tag${ink(c)}" style="--cc:${cssVar(c)}">${lines.map(([t, small]) => `<span class="ln${small ? " f4" : ""}">${esc(t)}</span>`).join("")}</span>`;
 }
 const schedLabel = s => CITY.schedLabel(s);
 
