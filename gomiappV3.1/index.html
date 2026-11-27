@@ -748,7 +748,9 @@ function makeCity(code, d){
     items: d.items.map(x => Array.isArray(x) ? {n:x[0], c:x[1], y:x[2], d:x[3]} : {...x}).map(it => it.k ? it : {...it, k: kanaHead(it.y)}),
     darkInk: new Set(c.darkInk || []), dayAs: c.dayAs || {}, outline: new Set(c.outlineInk || []), calOrder: c.calOrder, short: c.short, long: c.long, bag: c.bag,
     regions: c.regions || [], regionName: r => r ? r + (c.regionSuffix || "") : "",
-    schedLabel: s => c.schedHide ? "" : re && re.test(s) ? sp.label.replace("{s}", s) : s,   // schedHide：日程の名前を出さない（京都市など、町ごとに曜日が決まる市）
+    // schedHide：日程の名前を出さない（京都市など、町ごとに曜日が決まる市）。
+    // そうでなくても、決まりを並べた長い名前（「可燃:水曜・土曜／不燃:…」など）は、地区をえらぶ手がかりにならないので出さない
+    schedLabel: s => c.schedHide || /[:：／|]/.test(s) || s.length > 16 ? "" : re && re.test(s) ? sp.label.replace("{s}", s) : s,
     towns: (d.towns && d.towns.t) || [],   // 地区の検索用の町名 [[町名, [地区の番号…]], …]
     hint: c.hint || "", schedPick: c.schedPick || "", contact: c.contact, rules: c.rules, aiCat: c.aiCat || {},
     footer: c.footer.replace("{nendo}", nendo(d.calendar))
