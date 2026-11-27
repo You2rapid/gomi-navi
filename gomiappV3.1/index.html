@@ -1698,6 +1698,9 @@ function loadModel(){
     cam.loading = (async () => {
       if (!window.tf) await loadScript("ai/tf.min.js");
       if (!window.mobilenet) await loadScript("ai/mobilenet.min.js");
+      // スマホのアプリの中のブラウザでは、AI を速く動かすしくみ（WebGL）が使えないことがある。そのときは遅いしくみ（CPU）で動かす
+      try { await tf.ready(); if (tf.getBackend() !== "webgl") throw new Error("no webgl"); }
+      catch(e){ await tf.setBackend("cpu"); await tf.ready(); }
       cam.model = await mobilenet.load({version:2, alpha:1.0, modelUrl:"ai/model/model.json"});
       return cam.model;
     })().catch(e => { cam.loading = null; throw e; });
@@ -1751,16 +1754,20 @@ async function runCamera(file){
     <div id="camOut"><p class="cam-wait"><span class="spin"></span><span id="camMsg">見分けています…</span></p></div>`;
   sh.scrollTop = 0;
   const out = $("#camOut");
+  let step = "写真";   // どこで失敗したかを出す（原因を調べるため）
   try {
     const img = $("#camImg");
-    await new Promise((ok, ng) => { img.onload = ok; img.onerror = () => ng(new Error("img")); img.src = cam.url; });
+    await new Promise((ok, ng) => { img.onload = ok; img.onerror = () => ng(new Error("写真を開けません")); img.src = cam.url; });
+    step = "見分けるためのデータ";
     if (!cam.model) $("#camMsg").textContent = "見分けるためのデータを読み込んでいます…（はじめてのときは少し時間がかかります）";
     const model = await loadModel();
+    step = "見分ける";
     $("#camMsg").textContent = "見分けています…";
     const preds = await model.classify(squareCanvas(img), 10);
     renderGuesses(out, preds);
   } catch(e){
-    out.innerHTML = `<div class="sec"><div class="note-box">うまく読み込めませんでした。電波のよい所で、もう一度お試しください。</div></div>
+    out.innerHTML = `<div class="sec"><div class="note-box">うまく読み込めませんでした。電波のよい所で、もう一度お試しください。
+      <p class="small" style="margin:6px 0 0">（${esc(step)}でうまくいきませんでした：${esc(String(e && e.message || e).slice(0, 120))}${window.tf && tf.getBackend ? "・" + esc(String(tf.getBackend())) : ""}）</p></div></div>
       <button class="btn" data-camagain>もう一度撮る</button>`;
   }
 }
