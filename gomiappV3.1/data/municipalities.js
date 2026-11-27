@@ -198,6 +198,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "町田市",
    "slug": "machida",
    "yomi": "まちだし"
+  },
+  {
+   "code": "13114",
+   "pref": "13",
+   "name": "中野区",
+   "slug": "nakano",
+   "yomi": "なかのく"
   }
  ]
 }/*MUNIS-END*/;
