@@ -219,6 +219,13 @@ window.GOMI_MUNIS = /*MUNIS-START*/{
    "name": "目黒区",
    "slug": "meguro",
    "yomi": "めぐろく"
+  },
+  {
+   "code": "13107",
+   "pref": "13",
+   "name": "墨田区",
+   "slug": "sumida",
+   "yomi": "すみだく"
   }
  ]
 }/*MUNIS-END*/;
